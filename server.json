@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.bzsasson/screaming-frog-mcp",
+  "title": "Screaming Frog SEO Spider MCP Server",
+  "description": "Crawl websites, export SEO data, and manage crawls via Screaming Frog SEO Spider.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/bzsasson/screaming-frog-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "screaming-frog-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SF_CLI_PATH",
+          "description": "Path to the Screaming Frog SEO Spider CLI executable. Defaults to the standard macOS location.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

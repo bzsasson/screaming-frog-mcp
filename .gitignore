@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 .DS_Store
 marketing/
+dist/
+build/
+*.egg-info/

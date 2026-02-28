@@ -27,7 +27,19 @@ If you forget to close the GUI, the server will detect it and show a clear error
 
 ## Setup
 
-### 1. Clone and install
+### Option A: Install from PyPI (recommended)
+
+```bash
+pip install screaming-frog-mcp
+```
+
+Or run directly with `uvx` (no install needed):
+
+```bash
+uvx screaming-frog-mcp
+```
+
+### Option B: Clone and install from source
 
 ```bash
 git clone https://github.com/bzsasson/screaming-frog-mcp.git
@@ -37,15 +49,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure the CLI path
+### Configure the CLI path
 
-Copy the example env file and adjust the path if needed:
-
-```bash
-cp .env.example .env
-```
-
-The default path works for macOS. Edit `.env` if you're on Linux or Windows:
+The default Screaming Frog CLI path works for macOS. If you're on Linux or Windows, set the `SF_CLI_PATH` environment variable:
 
 | OS      | Default Path |
 |---------|-------------|
@@ -53,9 +59,27 @@ The default path works for macOS. Edit `.env` if you're on Linux or Windows:
 | Linux   | `/usr/bin/screamingfrogseospider` |
 | Windows | `C:\Program Files (x86)\Screaming Frog SEO Spider\ScreamingFrogSEOSpiderCli.exe` |
 
-### 3. Add to Claude Code
+If you cloned the repo, copy `.env.example` to `.env` and edit it.
 
-Add the following to your Claude Code MCP settings (`~/.claude/settings.json` or project-level `.claude/settings.json`):
+### Add to Claude Code
+
+If installed via pip/uvx:
+
+```json
+{
+  "mcpServers": {
+    "screaming-frog": {
+      "command": "uvx",
+      "args": ["screaming-frog-mcp"],
+      "env": {
+        "SF_CLI_PATH": "/path/to/ScreamingFrogSEOSpiderLauncher"
+      }
+    }
+  }
+}
+```
+
+If cloned from source:
 
 ```json
 {
@@ -68,14 +92,22 @@ Add the following to your Claude Code MCP settings (`~/.claude/settings.json` or
 }
 ```
 
-Replace `/path/to/` with the actual path where you cloned the repo.
+### Add to Claude Desktop
 
-### For other MCP clients
+Add to your Claude Desktop config (`claude_desktop_config.json`):
 
-The server runs as a standard MCP stdio server. Start it with:
-
-```bash
-/path/to/.venv/bin/python /path/to/sf_mcp.py
+```json
+{
+  "mcpServers": {
+    "screaming-frog": {
+      "command": "uvx",
+      "args": ["screaming-frog-mcp"],
+      "env": {
+        "SF_CLI_PATH": "/path/to/ScreamingFrogSEOSpiderLauncher"
+      }
+    }
+  }
+}
 ```
 
 ## Available Tools
@@ -131,7 +163,7 @@ save_report: "Crawl Overview"
 
 ## Temp file cleanup
 
-Exported CSVs are stored in temporary directories (`/tmp/sf-exports/`) and are automatically cleaned up after 1 hour.
+Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cleaned up after 1 hour.
 
 ## Troubleshooting
 
@@ -146,3 +178,5 @@ Exported CSVs are stored in temporary directories (`/tmp/sf-exports/`) and are a
 ## License
 
 MIT
+
+<!-- mcp-name: io.github.bzsasson/screaming-frog-mcp -->
