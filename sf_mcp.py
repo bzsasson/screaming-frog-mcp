@@ -368,7 +368,7 @@ async def export_crawl(
     Args:
         db_id: The Database ID from list_crawls (e.g. '1234' or a crawl identifier)
         export_tabs: Comma-separated export tabs (default: Internal:All,Response Codes:All,Page Titles:All,Meta Description:All,H1:All,H2:All,Images:All,Canonicals:All,Directives:All). See the export-reference resource for all options.
-        bulk_export: Optional bulk export types (e.g. 'All Links:All Links,All Inlinks:All Inlinks')
+        bulk_export: Optional bulk export types (e.g. 'All Inlinks,All Outlinks')
         save_report: Optional reports to save (e.g. 'Crawl Overview')
 
     Returns:
@@ -723,26 +723,37 @@ Export data from the main crawl tabs. Format: "Tab:Filter" comma-separated.
 - Spelling & Grammar: All, Spelling Errors, Grammar Errors
 
 ## --bulk-export (Type)
-Export large datasets. Comma-separated.
+Export large datasets. Comma-separated list of export names (no Category: prefix).
+Example: --bulk-export "All Inlinks,All Outlinks"
 
-- All Links:All Links
-- All Inlinks:All Inlinks
-- All Outlinks:All Outlinks
-- All Anchor Text:All Anchor Text
-- Response Times:Response Times
-- Cookies:Cookies
-- Content:Unique Content,Near Duplicates,Exact Duplicates
-- Custom Search:Contains,Does Not Contain
-- Canonicals:Canonicals
-- Hreflang:Hreflang
-- Images:All Image Inlinks,All Image Outlinks,Missing Alt Tags,Alt Text Over 100
-- JavaScript:JavaScript Links,JavaScript Rendering
-- Redirect Chains:All Redirect Chains
-- HTTP Headers:HTTP Headers
-- Sitemaps:All Sitemap URLs
-- Structured Data:All Structured Data,Validation Errors,Validation Warnings
-- Accessibility:Accessibility Issues
-- Links:External Links
+Available exports:
+- All Links
+- All Inlinks
+- All Outlinks
+- All Anchor Text
+- Response Times
+- Cookies
+- Unique Content
+- Near Duplicates
+- Exact Duplicates
+- Contains
+- Does Not Contain
+- Canonicals
+- Hreflang
+- All Image Inlinks
+- All Image Outlinks
+- Missing Alt Tags
+- Alt Text Over 100
+- JavaScript Links
+- JavaScript Rendering
+- All Redirect Chains
+- HTTP Headers
+- All Sitemap URLs
+- All Structured Data
+- Validation Errors
+- Validation Warnings
+- Accessibility Issues
+- External Links
 
 ## --save-report (Report)
 Save summary reports. Comma-separated.

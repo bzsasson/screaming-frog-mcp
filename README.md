@@ -4,10 +4,10 @@ An MCP (Model Context Protocol) server that gives Claude (or any MCP-compatible 
 
 ## Prerequisites
 
-1. **Screaming Frog SEO Spider** installed on your machine.
+1. **Screaming Frog SEO Spider** installed on your machine (tested with v23.x, should work with v16+).
    Download from: https://www.screamingfrog.co.uk/seo-spider/
 
-2. **A valid Screaming Frog license.** The free version has a 500-URL crawl limit. Most MCP features (headless crawling, saving/loading crawls) require a paid license.
+2. **A valid Screaming Frog license.** The free version has a 500-URL crawl limit. Most MCP features (headless CLI, saving/loading crawls, exports) require a paid license.
 
 3. **Python 3.10+**
 
