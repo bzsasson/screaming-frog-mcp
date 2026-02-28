@@ -12,7 +12,10 @@ import asyncio
 import csv
 import glob
 import io
+import ipaddress
+import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,11 +24,14 @@ import time
 import uuid
 from pathlib import Path
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 
@@ -35,8 +41,11 @@ SF_CLI_PATH = os.getenv(
 )
 
 SF_DATA_DIR = Path.home() / ".ScreamingFrogSEOSpider" / "ProjectInstanceData"
-TEMP_EXPORT_BASE = Path(tempfile.gettempdir()) / "sf-exports"
+TEMP_EXPORT_BASE = Path.home() / ".cache" / "sf-mcp" / "exports"
 EXPORT_TTL_SECONDS = 3600  # 1 hour
+MAX_CONCURRENT_CRAWLS = 2
+MAX_ACTIVE_EXPORTS = 10
+MAX_CRAWL_SIZE = 100000
 
 DEFAULT_EXPORT_TABS = (
     "Internal:All,Response Codes:All,Page Titles:All,"
@@ -51,6 +60,55 @@ _running_crawls: dict = {}
 
 # Track temp export dirs: export_id -> {path, created, db_id}
 _export_dirs: dict = {}
+
+
+def _validate_url(url: str) -> Optional[str]:
+    """Returns error message if URL is invalid/dangerous, None if OK."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "Invalid URL format."
+    if parsed.scheme not in ("http", "https"):
+        return f"Only http/https URLs are allowed, got: {parsed.scheme or 'none'}"
+    hostname = parsed.hostname or ""
+    if not hostname:
+        return "URL must include a hostname."
+    # Block private/internal IPs
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            return f"Internal/private addresses are not allowed: {hostname}"
+    except ValueError:
+        pass  # it's a domain name, not an IP — that's fine
+    blocked = {"localhost", "metadata.google.internal", "metadata.internal"}
+    if hostname.lower() in blocked:
+        return f"Blocked hostname: {hostname}"
+    return None
+
+
+def _validate_cli_arg(value: str, name: str) -> Optional[str]:
+    """Reject values that look like CLI flags (argument injection)."""
+    if value.strip().startswith("-"):
+        return f"ERROR: {name} must not start with '-'"
+    return None
+
+
+def _validate_db_id(db_id: str) -> Optional[str]:
+    """Validate db_id is a legitimate database identifier."""
+    if db_id.startswith("-"):
+        return "ERROR: db_id must not start with '-'"
+    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', db_id):
+        return "ERROR: db_id contains invalid characters"
+    return None
+
+
+def _path_is_contained(target: Path, parent: Path) -> bool:
+    """Check that target is inside parent (no path traversal)."""
+    try:
+        target.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def _sf_gui_is_running() -> bool:
@@ -86,18 +144,34 @@ def _cleanup_old_exports():
     ]
     for eid in expired:
         path = _export_dirs[eid]["path"]
-        if path.exists():
+        if path.exists() and not path.is_symlink():
             shutil.rmtree(path, ignore_errors=True)
         del _export_dirs[eid]
 
-    # Also clean orphaned dirs on disk
+    # Also clean orphaned dirs on disk — skip symlinks
     if TEMP_EXPORT_BASE.exists():
         for d in TEMP_EXPORT_BASE.iterdir():
-            if d.is_dir():
+            if d.is_symlink():
+                d.unlink()  # remove the symlink itself, never follow
+            elif d.is_dir():
                 age = now - d.stat().st_mtime
                 if age > EXPORT_TTL_SECONDS:
                     shutil.rmtree(d, ignore_errors=True)
 
+
+def _cleanup_completed_crawls():
+    """Remove completed crawl entries from memory."""
+    completed = [
+        cid for cid, info in _running_crawls.items()
+        if info["proc"].returncode is not None
+    ]
+    for cid in completed:
+        del _running_crawls[cid]
+
+
+# Ensure export base dir exists with restricted permissions
+TEMP_EXPORT_BASE.mkdir(parents=True, exist_ok=True)
+os.chmod(TEMP_EXPORT_BASE, 0o700)
 
 # Clean up on startup
 _cleanup_old_exports()
@@ -113,7 +187,7 @@ def sf_check() -> str:
     Returns version info and license status.
     """
     if not os.path.exists(SF_CLI_PATH):
-        return f"ERROR: Screaming Frog CLI not found at {SF_CLI_PATH}"
+        return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
 
     try:
         result = subprocess.run(
@@ -136,14 +210,12 @@ def sf_check() -> str:
         return (
             f"Screaming Frog is installed and accessible.\n"
             f"Version: {version}\n"
-            f"License: {license_status}\n"
-            f"CLI path: {SF_CLI_PATH}\n"
-            f"Data dir: {SF_DATA_DIR}"
+            f"License: {license_status}"
         )
     except subprocess.TimeoutExpired:
         return "Screaming Frog CLI found but timed out during check."
-    except Exception as e:
-        return f"ERROR checking Screaming Frog: {e}"
+    except Exception:
+        return "ERROR: Could not check Screaming Frog installation."
 
 
 @mcp.tool()
@@ -167,10 +239,22 @@ async def crawl_site(
         The crawl runs in the background - use crawl_status to poll.
     """
     if not os.path.exists(SF_CLI_PATH):
-        return f"ERROR: Screaming Frog CLI not found at {SF_CLI_PATH}"
+        return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
+
+    # Validate URL (SSRF protection)
+    url_err = _validate_url(url)
+    if url_err:
+        return f"ERROR: {url_err}"
 
     if _sf_gui_is_running():
         return SF_GUI_WARNING
+
+    # Enforce concurrent crawl limit
+    _cleanup_completed_crawls()
+    active = sum(1 for info in _running_crawls.values()
+                 if info["proc"].returncode is None)
+    if active >= MAX_CONCURRENT_CRAWLS:
+        return f"ERROR: Maximum {MAX_CONCURRENT_CRAWLS} concurrent crawls. Wait for running crawls to finish."
 
     crawl_id = f"crawl-{uuid.uuid4().hex[:8]}"
 
@@ -182,10 +266,17 @@ async def crawl_site(
     ]
 
     if config_file:
-        cmd.extend(["--config", config_file])
+        config_path = Path(config_file).resolve()
+        if config_path.suffix != ".seospiderconfig":
+            return "ERROR: Config file must have .seospiderconfig extension."
+        if not config_path.exists():
+            return "ERROR: Config file not found."
+        cmd.extend(["--config", str(config_path)])
 
     if max_urls:
-        cmd.extend(["--max-crawl-size", str(max_urls)])
+        if max_urls > MAX_CRAWL_SIZE:
+            return f"ERROR: max_urls cannot exceed {MAX_CRAWL_SIZE}."
+        cmd.extend(["--max-crawl-size", str(int(max_urls))])
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -200,7 +291,6 @@ async def crawl_site(
             "url": url,
             "label": label or url.replace("https://", "").replace("http://", "").split("/")[0],
             "started": time.time(),
-            "cmd": " ".join(cmd),
         }
 
         return (
@@ -211,8 +301,9 @@ async def crawl_site(
             f"Label: {_running_crawls[crawl_id]['label']}\n\n"
             f"Use crawl_status(crawl_id='{crawl_id}') to check progress."
         )
-    except Exception as e:
-        return f"ERROR starting crawl: {e}"
+    except Exception:
+        logger.exception("Failed to start crawl")
+        return "ERROR: Failed to start crawl."
 
 
 @mcp.tool()
@@ -298,7 +389,7 @@ def list_crawls() -> str:
     Use the Database ID with export_crawl or delete_crawl.
     """
     if not os.path.exists(SF_CLI_PATH):
-        return f"ERROR: Screaming Frog CLI not found at {SF_CLI_PATH}"
+        return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
 
     # Note: --list-crawls works fine even when the GUI is running (read-only).
     # No GUI check needed here.
@@ -351,8 +442,9 @@ def list_crawls() -> str:
 
     except subprocess.TimeoutExpired:
         return "ERROR: Timed out listing crawls (60s limit)."
-    except Exception as e:
-        return f"ERROR listing crawls: {e}"
+    except Exception:
+        logger.exception("Failed to list crawls")
+        return "ERROR: Failed to list crawls."
 
 
 @mcp.tool()
@@ -375,12 +467,27 @@ async def export_crawl(
         An export_id and list of generated CSV files. Use read_crawl_data to read them.
     """
     if not os.path.exists(SF_CLI_PATH):
-        return f"ERROR: Screaming Frog CLI not found at {SF_CLI_PATH}"
+        return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
+
+    # Validate all inputs
+    db_err = _validate_db_id(db_id)
+    if db_err:
+        return db_err
+
+    for param_name, param_val in [("export_tabs", export_tabs), ("bulk_export", bulk_export), ("save_report", save_report)]:
+        if param_val:
+            arg_err = _validate_cli_arg(param_val, param_name)
+            if arg_err:
+                return arg_err
 
     if _sf_gui_is_running():
         return SF_GUI_WARNING
 
     _cleanup_old_exports()
+
+    # Enforce export limit
+    if len(_export_dirs) >= MAX_ACTIVE_EXPORTS:
+        return f"ERROR: Maximum {MAX_ACTIVE_EXPORTS} active exports. Wait for cleanup or delete old exports."
 
     export_id = f"export-{uuid.uuid4().hex[:8]}"
     export_dir = TEMP_EXPORT_BASE / export_id
@@ -482,8 +589,9 @@ async def export_crawl(
         )
     except asyncio.TimeoutError:
         return "ERROR: Export timed out (5 minute limit). The crawl may be very large."
-    except Exception as e:
-        return f"ERROR exporting crawl: {e}"
+    except Exception:
+        logger.exception("Failed to export crawl")
+        return "ERROR: Failed to export crawl."
 
 
 @mcp.tool()
@@ -523,17 +631,27 @@ def read_crawl_data(
         return "Export directory has been cleaned up. Run export_crawl again."
 
     # Find the file - try exact match first, then search
+    # Sanitize: strip path separators and traversal attempts
+    safe_file = Path(file).name  # extract just the filename, no directory components
     target = export_dir / file
+    # Path traversal check
+    if not _path_is_contained(target, export_dir):
+        target = export_dir / safe_file  # fall back to just the filename
+
     if not target.exists():
-        # Search subdirectories
-        matches = list(export_dir.rglob(file))
+        # Search subdirectories — only use the safe filename
+        matches = [f for f in export_dir.rglob(safe_file) if _path_is_contained(f, export_dir)]
         if not matches:
-            # Try partial match
-            matches = list(export_dir.rglob(f"*{file}*"))
+            # Try partial match with safe filename
+            matches = [f for f in export_dir.rglob(f"*{safe_file}*") if _path_is_contained(f, export_dir)]
         if not matches:
             available = [str(f.relative_to(export_dir)) for f in export_dir.rglob("*.csv")]
-            return f"File '{file}' not found.\nAvailable files:\n" + "\n".join(f"  {f}" for f in available)
+            return f"File '{safe_file}' not found.\nAvailable files:\n" + "\n".join(f"  {f}" for f in available)
         target = matches[0]
+
+    # Final containment check
+    if not _path_is_contained(target, export_dir):
+        return "ERROR: Invalid file path."
 
     try:
         with open(target, "r", encoding="utf-8-sig") as f:
@@ -588,8 +706,9 @@ def read_crawl_data(
 
             return output
 
-    except Exception as e:
-        return f"ERROR reading {file}: {e}"
+    except Exception:
+        logger.exception("Failed to read export data")
+        return f"ERROR: Failed to read {safe_file}."
 
 
 @mcp.tool()
@@ -603,7 +722,11 @@ def delete_crawl(db_id: str) -> str:
     WARNING: This permanently deletes the crawl data. It cannot be undone.
     """
     if not os.path.exists(SF_CLI_PATH):
-        return f"ERROR: Screaming Frog CLI not found at {SF_CLI_PATH}"
+        return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
+
+    db_err = _validate_db_id(db_id)
+    if db_err:
+        return db_err
 
     if _sf_gui_is_running():
         return SF_GUI_WARNING
@@ -628,8 +751,9 @@ def delete_crawl(db_id: str) -> str:
 
     except subprocess.TimeoutExpired:
         return "ERROR: Delete timed out (60s limit)."
-    except Exception as e:
-        return f"ERROR deleting crawl: {e}"
+    except Exception:
+        logger.exception("Failed to delete crawl")
+        return "ERROR: Failed to delete crawl."
 
 
 @mcp.tool()
@@ -639,7 +763,7 @@ def storage_summary() -> str:
     Returns total size and per-crawl breakdown of ProjectInstanceData.
     """
     if not SF_DATA_DIR.exists():
-        return f"SF data directory not found: {SF_DATA_DIR}"
+        return "SF data directory not found."
 
     total_size = 0
     entries = []
@@ -663,7 +787,6 @@ def storage_summary() -> str:
                 temp_size += sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
 
     result = f"Screaming Frog Storage Summary\n{'=' * 40}\n\n"
-    result += f"Internal DB location: {SF_DATA_DIR}\n"
     result += f"Total DB size: {_format_size(total_size)}\n\n"
 
     if entries:
