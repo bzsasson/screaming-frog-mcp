@@ -83,7 +83,7 @@ The server runs as a standard MCP stdio server. Start it with:
 | Tool | Description |
 |------|-------------|
 | `sf_check` | Verify Screaming Frog is installed, check version and license status |
-| `crawl_site` | Start a background crawl (saves to SF's internal database) |
+| `crawl_site` | Start a headless background crawl (see note below) |
 | `crawl_status` | Check progress of a running crawl |
 | `list_crawls` | List all saved crawls with their Database IDs |
 | `export_crawl` | Export crawl data as CSV files (many export options available) |
@@ -99,13 +99,9 @@ The server runs as a standard MCP stdio server. Start it with:
 
 The assistant will call `sf_check` and report version/license info.
 
-### Crawl a site via MCP
+### Work with existing crawls (recommended flow)
 
-> "Crawl https://example.com with a max of 100 URLs"
-
-This starts a headless background crawl. Use `crawl_status` to poll for completion.
-
-### Work with existing crawls (most common flow)
+For most use cases, **crawl in the Screaming Frog GUI** where you have full control over configuration, JavaScript rendering, crawl scope, custom extraction, etc. Then close the GUI and use the MCP to analyze the results:
 
 After you've crawled a site in the Screaming Frog GUI and closed it:
 
@@ -114,13 +110,22 @@ After you've crawled a site in the Screaming Frog GUI and closed it:
 > "Show me all pages with missing meta descriptions"
 > "What are the 404 pages?"
 
+### Crawl a site via MCP (optional)
+
+> "Crawl https://example.com with a max of 100 URLs"
+
+The `crawl_site` tool can kick off headless crawls via CLI. This is useful for quick re-crawls or automated workflows, but note the limitations compared to the GUI:
+- Uses default crawl settings (no custom extraction, JavaScript rendering config, etc.)
+- You can pass a `.seospiderconfig` file to customize settings, but the GUI is easier for complex setups
+- The crawl must finish and save before you can export data
+
 ### Export options
 
 The server supports all of Screaming Frog's export tabs, bulk exports, and reports. Ask the assistant to read the `screaming-frog://export-reference` resource for the full list, or specify them directly:
 
 ```
 export_tabs: "Internal:All,Response Codes:All,Page Titles:All"
-bulk_export: "All Links:All Links,Redirect Chains:All Redirect Chains"
+bulk_export: "All Inlinks,All Outlinks"
 save_report: "Crawl Overview"
 ```
 
