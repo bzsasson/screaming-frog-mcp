@@ -11,15 +11,13 @@ CSV exports are generated on-demand into temp dirs.
 import asyncio
 import csv
 import glob
-import io
 import ipaddress
 import logging
 import os
 import re
 import shutil
+import socket
 import subprocess
-import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -46,12 +44,31 @@ EXPORT_TTL_SECONDS = 3600  # 1 hour
 MAX_CONCURRENT_CRAWLS = 2
 MAX_ACTIVE_EXPORTS = 10
 MAX_CRAWL_SIZE = 100000
+MAX_READ_LIMIT = 1000
+MAX_INPUT_LENGTH = 2000
+MAX_CRAWL_DURATION = 7200  # 2 hours
+
+# Optional domain allowlist for crawl targets (env var, comma-separated)
+_allowed_domains_raw = os.getenv("SF_ALLOWED_DOMAINS", "")
+ALLOWED_DOMAINS = [d.strip().lower() for d in _allowed_domains_raw.split(",") if d.strip()]
+
+# Allowed config directory for .seospiderconfig files
+CONFIG_DIR = Path(os.getenv(
+    "SF_CONFIG_DIR",
+    str(Path.home() / ".config" / "sf-mcp" / "configs"),
+))
 
 DEFAULT_EXPORT_TABS = (
     "Internal:All,Response Codes:All,Page Titles:All,"
     "Meta Description:All,H1:All,H2:All,Images:All,"
     "Canonicals:All,Directives:All"
 )
+
+# Allowlisted CLI argument characters for export_tabs / bulk_export / save_report.
+# Derived from EXPORT_REFERENCE: alphanumeric, spaces, commas, colons, ampersands,
+# hyphens, dots, parens, plus signs, forward slashes, percent signs,
+# angle brackets (SF uses <head>, <body> in filter names).
+_CLI_ARG_PATTERN = re.compile(r'^[a-zA-Z0-9 ,:&\-\.\(\)\+/%<>]+$')
 
 # --- State ---
 
@@ -73,32 +90,68 @@ def _validate_url(url: str) -> Optional[str]:
     hostname = parsed.hostname or ""
     if not hostname:
         return "URL must include a hostname."
-    # Block private/internal IPs
+
+    # Strip IPv6 brackets for ip_address() parsing
+    clean_host = hostname.strip("[]")
+
+    # Block private/internal IPs (literal IP in URL)
     try:
-        ip = ipaddress.ip_address(hostname)
+        ip = ipaddress.ip_address(clean_host)
         if ip.is_private or ip.is_loopback or ip.is_link_local:
             return f"Internal/private addresses are not allowed: {hostname}"
     except ValueError:
-        pass  # it's a domain name, not an IP — that's fine
-    blocked = {"localhost", "metadata.google.internal", "metadata.internal"}
-    if hostname.lower() in blocked:
+        pass  # it's a domain name, not an IP -- that's fine
+
+    # Block known dangerous hostnames
+    blocked = {
+        "localhost",
+        "metadata.google.internal",
+        "metadata.internal",
+        "169.254.169.254",
+    }
+    if clean_host.lower() in blocked:
         return f"Blocked hostname: {hostname}"
+
+    # Domain allowlist (if configured via SF_ALLOWED_DOMAINS env var)
+    if ALLOWED_DOMAINS:
+        if clean_host.lower() not in ALLOWED_DOMAINS:
+            return (
+                f"Domain {hostname} not in allowed list. "
+                f"Set SF_ALLOWED_DOMAINS to permit it."
+            )
+
+    # DNS resolution check: resolve the hostname and verify all IPs are public.
+    # Mitigates DNS rebinding attacks where a domain resolves to a private IP.
+    try:
+        addrs = socket.getaddrinfo(clean_host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, sockaddr in addrs:
+            resolved_ip = ipaddress.ip_address(sockaddr[0])
+            if resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local:
+                return f"Domain {hostname} resolves to internal address {sockaddr[0]}"
+    except socket.gaierror:
+        return f"Cannot resolve hostname: {hostname}"
+
     return None
 
 
 def _validate_cli_arg(value: str, name: str) -> Optional[str]:
-    """Reject values that look like CLI flags (argument injection)."""
+    """Validate CLI argument values against an allowlist of safe characters."""
+    if not value or len(value) > MAX_INPUT_LENGTH:
+        return f"ERROR: {name} is empty or exceeds {MAX_INPUT_LENGTH} chars"
     if value.strip().startswith("-"):
         return f"ERROR: {name} must not start with '-'"
+    if not _CLI_ARG_PATTERN.match(value):
+        return f"ERROR: {name} contains invalid characters"
     return None
 
 
 def _validate_db_id(db_id: str) -> Optional[str]:
-    """Validate db_id is a legitimate database identifier."""
-    if db_id.startswith("-"):
-        return "ERROR: db_id must not start with '-'"
-    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', db_id):
-        return "ERROR: db_id contains invalid characters"
+    """Validate db_id is a UUID (the format SF uses for crawl database IDs)."""
+    if not db_id or len(db_id) > 100:
+        return "ERROR: db_id is empty or too long"
+    # SF uses UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    if not re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', db_id):
+        return "ERROR: db_id must be a valid UUID (e.g. from list_crawls)"
     return None
 
 
@@ -160,13 +213,62 @@ def _cleanup_old_exports():
 
 
 def _cleanup_completed_crawls():
-    """Remove completed crawl entries from memory."""
+    """Remove completed crawl entries from memory and clean up log files."""
     completed = [
         cid for cid, info in _running_crawls.items()
         if info["proc"].returncode is not None
     ]
     for cid in completed:
+        info = _running_crawls[cid]
+        _close_crawl_logs(info)
+        log_dir = info.get("log_dir")
+        if log_dir and log_dir.exists() and not log_dir.is_symlink():
+            shutil.rmtree(log_dir, ignore_errors=True)
         del _running_crawls[cid]
+
+
+# Lines to filter from SF CLI output (contain internal paths, JVM info, etc.)
+_SF_LOG_FILTERS = [
+    "INFO  -", "WARNING:", "com.sun.", "Lock File",
+    "font", "proxy", "Signature", "License",
+    "Running:", "Platform", "Java Info", "VM args",
+    "Log File", "Fatal Log", "Logging Status",
+    "Memory:", "Licence", "Locale:", "Time Zone",
+    "Checking Licence", "antialias", "SfRoboto",
+]
+
+
+def _sanitize_sf_output(output: str) -> str:
+    """Filter verbose SF CLI log lines that may leak internal paths or config."""
+    lines = output.splitlines()
+    return "\n".join(
+        line for line in lines
+        if not any(skip in line for skip in _SF_LOG_FILTERS)
+    )
+
+
+def _close_crawl_logs(info: dict) -> None:
+    """Close log file handles for a crawl."""
+    for key in ("stdout_log", "stderr_log"):
+        fh = info.get(key)
+        if fh and not fh.closed:
+            fh.close()
+
+
+def _read_crawl_logs(info: dict) -> str:
+    """Read crawl log files and return combined output."""
+    output = ""
+    log_dir = info.get("log_dir")
+    if not log_dir:
+        return output
+    for name in ("stdout.log", "stderr.log"):
+        log_file = log_dir / name
+        if log_file.exists():
+            try:
+                output += log_file.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+    return output
 
 
 # Ensure export base dir exists with restricted permissions
@@ -269,36 +371,54 @@ async def crawl_site(
         config_path = Path(config_file).resolve()
         if config_path.suffix != ".seospiderconfig":
             return "ERROR: Config file must have .seospiderconfig extension."
+        if config_path.is_symlink():
+            return "ERROR: Config file must not be a symlink."
+        if not _path_is_contained(config_path, CONFIG_DIR):
+            return (
+                f"ERROR: Config files must be in {CONFIG_DIR}. "
+                f"Set SF_CONFIG_DIR to change the allowed directory."
+            )
         if not config_path.exists():
             return "ERROR: Config file not found."
         cmd.extend(["--config", str(config_path)])
 
-    if max_urls:
+    if max_urls is not None and max_urls != 0:
+        if max_urls < 1:
+            return "ERROR: max_urls must be >= 1."
         if max_urls > MAX_CRAWL_SIZE:
             return f"ERROR: max_urls cannot exceed {MAX_CRAWL_SIZE}."
         cmd.extend(["--max-crawl-size", str(int(max_urls))])
 
     try:
+        # Write crawl output to temp log files instead of PIPE to avoid
+        # pipe buffer deadlock on long-running crawls (macOS pipe buffer ~64KB).
+        log_dir = TEMP_EXPORT_BASE / f"{crawl_id}-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stdout_log = open(log_dir / "stdout.log", "w")
+        stderr_log = open(log_dir / "stderr.log", "w")
+
         proc = await asyncio.create_subprocess_exec(
             *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=stdout_log,
+            stderr=stderr_log,
         )
 
+        crawl_label = label or url.replace("https://", "").replace("http://", "").split("/")[0]
         _running_crawls[crawl_id] = {
-            "pid": proc.pid,
             "proc": proc,
             "url": url,
-            "label": label or url.replace("https://", "").replace("http://", "").split("/")[0],
+            "label": crawl_label,
             "started": time.time(),
+            "log_dir": log_dir,
+            "stdout_log": stdout_log,
+            "stderr_log": stderr_log,
         }
 
         return (
             f"Crawl started in background.\n"
             f"Crawl ID: {crawl_id}\n"
-            f"PID: {proc.pid}\n"
             f"URL: {url}\n"
-            f"Label: {_running_crawls[crawl_id]['label']}\n\n"
+            f"Label: {crawl_label}\n\n"
             f"Use crawl_status(crawl_id='{crawl_id}') to check progress."
         )
     except Exception:
@@ -330,30 +450,38 @@ async def crawl_status(crawl_id: str) -> str:
         except asyncio.TimeoutError:
             pass
 
+    # Enforce max crawl duration
+    if proc.returncode is None and elapsed > MAX_CRAWL_DURATION:
+        proc.terminate()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=10)
+        except asyncio.TimeoutError:
+            proc.kill()
+        _close_crawl_logs(info)
+        return (
+            f"Crawl {crawl_id} terminated (exceeded {MAX_CRAWL_DURATION // 3600}h limit).\n"
+            f"URL: {info['url']}\n"
+            f"Elapsed: {elapsed_str}\n"
+            f"The partial crawl may be saved. Use list_crawls() to check."
+        )
+
     if proc.returncode is None:
         return (
             f"Crawl {crawl_id} is still running.\n"
             f"URL: {info['url']}\n"
             f"Label: {info['label']}\n"
-            f"PID: {info['pid']}\n"
             f"Elapsed: {elapsed_str}\n\n"
             f"Use crawl_status(crawl_id='{crawl_id}') to check again."
         )
 
-    # Process completed
-    stdout = ""
-    stderr = ""
-    if proc.stdout:
-        raw = await proc.stdout.read()
-        stdout = raw.decode("utf-8", errors="replace")
-    if proc.stderr:
-        raw = await proc.stderr.read()
-        stderr = raw.decode("utf-8", errors="replace")
+    # Process completed -- read logs from files
+    _close_crawl_logs(info)
+    log_output = _read_crawl_logs(info)
 
     # Extract useful info from logs
     urls_crawled = "unknown"
-    for line in (stdout + stderr).splitlines():
-        if "URLs crawled" in line.lower() or "crawl complete" in line.lower():
+    for line in log_output.splitlines():
+        if "urls crawled" in line.lower() or "crawl complete" in line.lower():
             urls_crawled = line.strip()
 
     status = "completed" if proc.returncode == 0 else f"failed (exit code {proc.returncode})"
@@ -367,9 +495,9 @@ async def crawl_status(crawl_id: str) -> str:
     )
 
     if proc.returncode != 0:
-        # Show last 20 lines of output for debugging
-        all_output = (stdout + stderr).strip().splitlines()
-        tail = "\n".join(all_output[-20:])
+        # Show last 20 lines of filtered output for debugging
+        filtered = _sanitize_sf_output(log_output)
+        tail = "\n".join(filtered.strip().splitlines()[-20:])
         result += f"\nLast output:\n{tail}"
 
     result += (
@@ -434,7 +562,7 @@ def list_crawls() -> str:
             # Fallback: show the full filtered output
             return (
                 "Screaming Frog --list-crawls output:\n\n"
-                + output[-3000:]  # Last 3000 chars to avoid huge output
+                + _sanitize_sf_output(output[-3000:])
                 + "\n\nNote: If no crawls are shown, the SF database may be empty."
             )
 
@@ -524,8 +652,8 @@ async def export_crawl(
         stderr = stderr_raw.decode("utf-8", errors="replace")
 
         if proc.returncode != 0:
-            all_output = (stdout + stderr).strip().splitlines()
-            tail = "\n".join(all_output[-15:])
+            filtered = _sanitize_sf_output(stdout + stderr)
+            tail = "\n".join(filtered.strip().splitlines()[-15:])
             return f"ERROR exporting crawl (exit code {proc.returncode}):\n{tail}"
 
         # List generated files
@@ -617,6 +745,10 @@ def read_crawl_data(
     Returns:
         CSV data as formatted text with column headers.
     """
+    # Clamp limit and offset to sane values
+    limit = max(1, min(limit, MAX_READ_LIMIT))
+    offset = max(0, offset)
+
     # Coerce filter_value to string (MCP clients may send numbers as int/float)
     if filter_value is not None:
         filter_value = str(filter_value)
@@ -639,11 +771,14 @@ def read_crawl_data(
         target = export_dir / safe_file  # fall back to just the filename
 
     if not target.exists():
-        # Search subdirectories — only use the safe filename
-        matches = [f for f in export_dir.rglob(safe_file) if _path_is_contained(f, export_dir)]
+        # Search subdirectories — only use the safe filename, escape glob chars
+        escaped = glob.escape(safe_file)
+        matches = [f for f in export_dir.rglob(escaped)
+                   if _path_is_contained(f, export_dir) and not f.is_symlink()]
         if not matches:
-            # Try partial match with safe filename
-            matches = [f for f in export_dir.rglob(f"*{safe_file}*") if _path_is_contained(f, export_dir)]
+            # Try partial match with escaped filename
+            matches = [f for f in export_dir.rglob(f"*{escaped}*")
+                       if _path_is_contained(f, export_dir) and not f.is_symlink()]
         if not matches:
             available = [str(f.relative_to(export_dir)) for f in export_dir.rglob("*.csv")]
             return f"File '{safe_file}' not found.\nAvailable files:\n" + "\n".join(f"  {f}" for f in available)
@@ -656,6 +791,12 @@ def read_crawl_data(
     try:
         with open(target, "r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
+
+            # Validate filter_column exists in headers
+            if filter_column and reader.fieldnames and filter_column not in reader.fieldnames:
+                available = ", ".join(reader.fieldnames[:20])
+                return f"Column '{filter_column}' not found.\nAvailable columns: {available}"
+
             rows = []
             skipped = 0
             for row in reader:
@@ -702,7 +843,7 @@ def read_crawl_data(
 
             # Truncation note
             if len(rows) == limit:
-                output += f"\n... showing first {limit} rows. Use offset={offset + limit} for next page."
+                output += f"\n... limit of {limit} rows reached. Use offset={offset + limit} for next page."
 
             return output
 
@@ -744,9 +885,9 @@ def delete_crawl(db_id: str) -> str:
         if result.returncode == 0:
             return f"Crawl {db_id} deleted successfully."
 
-        # Check for common errors
-        all_lines = output.strip().splitlines()
-        tail = "\n".join(all_lines[-10:])
+        # Check for common errors -- filter internal paths from output
+        filtered = _sanitize_sf_output(output)
+        tail = "\n".join(filtered.strip().splitlines()[-10:])
         return f"Delete may have failed (exit code {result.returncode}):\n{tail}"
 
     except subprocess.TimeoutExpired:
