@@ -7,3 +7,6 @@ marketing/
 dist/
 build/
 *.egg-info/
+.mcp.json
+.mcpregistry_*
+.pytest_cache/
