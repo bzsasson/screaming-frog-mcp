@@ -730,6 +730,7 @@ def read_crawl_data(
     offset: int = 0,
     filter_column: Optional[str] = None,
     filter_value: Optional[Union[str, int, float]] = None,
+    filter_mode: Optional[str] = None,
 ) -> str:
     """
     Read CSV data from an export. Use after export_crawl.
@@ -737,10 +738,11 @@ def read_crawl_data(
     Args:
         export_id: The export_id from export_crawl
         file: CSV filename to read (from the file list in export_crawl output)
-        limit: Max rows to return (default 100)
+        limit: Max rows to return (default 100, max 1000)
         offset: Number of rows to skip (for pagination)
         filter_column: Optional column name to filter by
-        filter_value: Optional value to match in the filter column (case-insensitive substring)
+        filter_value: Optional value to match in the filter column
+        filter_mode: How to match filter_value: "contains" (default, case-insensitive substring), "exact" (case-insensitive exact match), or "regex" (Python regex)
 
     Returns:
         CSV data as formatted text with column headers.
@@ -749,9 +751,22 @@ def read_crawl_data(
     limit = max(1, min(limit, MAX_READ_LIMIT))
     offset = max(0, offset)
 
+    # Validate filter_mode
+    mode = (filter_mode or "contains").lower()
+    if mode not in ("contains", "exact", "regex"):
+        return "ERROR: filter_mode must be 'contains', 'exact', or 'regex'"
+
     # Coerce filter_value to string (MCP clients may send numbers as int/float)
     if filter_value is not None:
         filter_value = str(filter_value)
+
+    # Pre-compile regex if needed
+    filter_regex = None
+    if mode == "regex" and filter_value:
+        try:
+            filter_regex = re.compile(filter_value, re.IGNORECASE)
+        except re.error as e:
+            return f"ERROR: Invalid regex pattern: {e}"
 
     if export_id not in _export_dirs:
         active = ", ".join(_export_dirs.keys()) if _export_dirs else "none"
@@ -803,8 +818,15 @@ def read_crawl_data(
                 # Apply filter
                 if filter_column and filter_value:
                     cell = row.get(filter_column, "")
-                    if filter_value.lower() not in cell.lower():
-                        continue
+                    if mode == "exact":
+                        if cell.lower() != filter_value.lower():
+                            continue
+                    elif mode == "regex":
+                        if not filter_regex.search(cell):
+                            continue
+                    else:  # contains
+                        if filter_value.lower() not in cell.lower():
+                            continue
 
                 if skipped < offset:
                     skipped += 1
@@ -824,7 +846,7 @@ def read_crawl_data(
             output = f"File: {target.relative_to(export_dir)}\n"
             output += f"Showing rows {offset + 1}-{offset + len(rows)}"
             if filter_column:
-                output += f" (filtered: {filter_column} contains '{filter_value}')"
+                output += f" (filtered: {filter_column} {mode} '{filter_value}')"
             output += f"\n\n"
 
             # Header

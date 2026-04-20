@@ -237,3 +237,81 @@ class TestExportReference:
     ])
     def test_bulk_exports_documented(self, export):
         assert export in EXPORT_REFERENCE
+
+
+# ---------------------------------------------------------------------------
+# read_crawl_data filter modes
+# ---------------------------------------------------------------------------
+
+class TestFilterModes:
+    """Tests for read_crawl_data filter_mode parameter."""
+
+    @pytest.fixture
+    def csv_export(self, tmp_path):
+        """Create a mock export with a CSV file."""
+        from sf_mcp import _export_dirs
+        export_id = "test-export"
+        export_dir = tmp_path / export_id
+        export_dir.mkdir()
+        csv_file = export_dir / "test.csv"
+        csv_file.write_text(
+            "URL,Status Code,Word Count\n"
+            "https://example.com/,200,1500\n"
+            "https://example.com/about,200,800\n"
+            "https://example.com/404,404,0\n"
+            "https://example.com/old,301,0\n"
+            "https://example.com/error,500,42\n"
+        )
+        _export_dirs[export_id] = {
+            "path": export_dir,
+            "created": __import__("time").time(),
+            "db_id": "test",
+        }
+        yield export_id
+        _export_dirs.pop(export_id, None)
+
+    def test_contains_mode_default(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="0")
+        # substring: "0" matches 200, 200, 404, 301, 500 (all contain "0")
+        assert "200" in result
+        assert "404" in result
+
+    def test_exact_mode(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="200", filter_mode="exact")
+        assert "200" in result
+        assert "404" not in result
+        assert "301" not in result
+
+    def test_exact_mode_single_match(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="404", filter_mode="exact")
+        assert "404" in result
+        assert "rows 1-1" in result
+
+    def test_regex_mode(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="^[45]", filter_mode="regex")
+        assert "404" in result
+        assert "500" in result
+        # 200 and 301 should NOT match ^[45]
+        lines = result.split("\n")
+        data_lines = [l for l in lines if "example.com" in l]
+        assert len(data_lines) == 2
+
+    def test_regex_invalid_pattern(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="[invalid", filter_mode="regex")
+        assert "Invalid regex" in result
+
+    def test_invalid_filter_mode(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Status Code", filter_value="200", filter_mode="invalid")
+        assert "filter_mode must be" in result
+
+    def test_nonexistent_column(self, csv_export):
+        from sf_mcp import read_crawl_data
+        result = read_crawl_data(csv_export, "test.csv", filter_column="Nonexistent", filter_value="x")
+        assert "Column 'Nonexistent' not found" in result
+        assert "Status Code" in result
