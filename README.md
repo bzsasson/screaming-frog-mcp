@@ -171,9 +171,15 @@ save_report: "Crawl Overview"
 | `SF_ALLOWED_DOMAINS` | Comma-separated list of allowed crawl target domains. When set, `crawl_site` only accepts URLs matching these domains. | Empty (all domains allowed) |
 | `SF_CONFIG_DIR` | Directory containing `.seospiderconfig` files that `crawl_site` can load. | `~/.config/sf-mcp/configs/` |
 
-### Notes on filtering
+### Filtering modes
 
-`read_crawl_data`'s `filter_value` uses **case-insensitive substring matching**. For example, filtering by `filter_value="4"` on a Status Code column matches 4xx, 204, 304, etc. For exact matches, filter broadly and inspect the results.
+`read_crawl_data` supports three filter modes via the `filter_mode` parameter:
+
+| Mode | Behavior | Example |
+|------|----------|---------|
+| `contains` (default) | Case-insensitive substring match | `filter_value="4"` matches 400, 204, 1450 |
+| `exact` | Case-insensitive exact match | `filter_value="404"` matches only 404 |
+| `regex` | Python regex (case-insensitive) | `filter_value="^[45]"` matches 4xx and 5xx |
 
 ## Temp file cleanup
 

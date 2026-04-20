@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 (2026-04-20)
+
+### New features
+
+- `filter_mode` parameter for `read_crawl_data`: `contains` (default), `exact`, or `regex`
+- CI pipeline: tests run on push/PR across Python 3.10-3.13
+- Trusted publishing: PyPI releases via GitHub Actions (no manual token needed)
+
 ## 0.2.0 (2026-04-20)
 
 ### Security

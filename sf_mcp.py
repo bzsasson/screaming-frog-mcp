@@ -15,12 +15,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from screaming_frog_mcp.server import main  # noqa: E402
 
-# Re-export validators and constants for tests that import from sf_mcp
+# Re-export validators, constants, and tools for tests that import from sf_mcp
 from screaming_frog_mcp.server import (  # noqa: E402, F401
     _validate_url,
     _validate_db_id,
     _validate_cli_arg,
     _path_is_contained,
+    _export_dirs,
+    read_crawl_data,
     EXPORT_REFERENCE,
     MAX_READ_LIMIT,
     MAX_INPUT_LENGTH,
