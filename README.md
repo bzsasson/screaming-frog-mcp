@@ -161,6 +161,20 @@ bulk_export: "All Inlinks,All Outlinks"
 save_report: "Crawl Overview"
 ```
 
+## Configuration
+
+### Environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SF_CLI_PATH` | Path to the Screaming Frog CLI executable | macOS default path |
+| `SF_ALLOWED_DOMAINS` | Comma-separated list of allowed crawl target domains. When set, `crawl_site` only accepts URLs matching these domains. | Empty (all domains allowed) |
+| `SF_CONFIG_DIR` | Directory containing `.seospiderconfig` files that `crawl_site` can load. | `~/.config/sf-mcp/configs/` |
+
+### Notes on filtering
+
+`read_crawl_data`'s `filter_value` uses **case-insensitive substring matching**. For example, filtering by `filter_value="4"` on a Status Code column matches 4xx, 204, 304, etc. For exact matches, filter broadly and inspect the results.
+
 ## Temp file cleanup
 
 Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cleaned up after 1 hour.
