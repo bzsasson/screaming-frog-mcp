@@ -10,3 +10,4 @@ build/
 .mcp.json
 .mcpregistry_*
 .pytest_cache/
+directories/
