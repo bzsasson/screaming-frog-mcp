@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 (2026-04-22)
+
+### Bug fixes
+
+- Fixed `UnicodeDecodeError` on Windows (cp1252 locale) that crashed `list_crawls` and could affect other subprocess calls (#5)
+- Added `encoding='utf-8', errors='replace'` to all `subprocess.run` calls so non-ASCII CLI output is handled safely on any locale
+- Added `None` guard on value length check in `read_crawl_data` CSV rendering
+
 ## 0.2.1 (2026-04-20)
 
 ### New features

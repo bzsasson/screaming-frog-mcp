@@ -170,7 +170,9 @@ def _sf_gui_is_running() -> bool:
     try:
         result = subprocess.run(
             ["pgrep", "-f", "ScreamingFrogSEOSpider.jar"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=5,
         )
         return result.returncode == 0
     except Exception:
@@ -296,6 +298,8 @@ def sf_check() -> str:
             [SF_CLI_PATH, "--headless", "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
         )
         output = result.stdout + result.stderr
@@ -527,6 +531,8 @@ def list_crawls() -> str:
             [SF_CLI_PATH, "--headless", "--list-crawls"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
         )
 
@@ -858,7 +864,7 @@ def read_crawl_data(
                 values = []
                 for col in columns:
                     val = row.get(col, "")
-                    if len(val) > 80:
+                    if val is not None and len(val) > 80:
                         val = val[:77] + "..."
                     values.append(val)
                 output += " | ".join(values) + "\n"
@@ -899,6 +905,8 @@ def delete_crawl(db_id: str) -> str:
             [SF_CLI_PATH, "--headless", "--delete-crawl", db_id],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
         )
 
