@@ -194,6 +194,7 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 | CLI not found | Check that `SF_CLI_PATH` in `.env` points to the correct executable |
 | Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing |
 | Export times out | Large crawls may need more time — try exporting fewer tabs |
+| `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uvx screaming-frog-mcp@latest` or `pip install -U screaming-frog-mcp` |
 
 ## License
 
