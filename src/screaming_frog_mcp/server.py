@@ -546,14 +546,7 @@ def list_crawls() -> str:
         crawl_lines = []
         for line in output.splitlines():
             # Filter out the verbose startup/info logs, keep crawl-relevant lines
-            if any(skip in line for skip in [
-                "INFO  -", "WARNING:", "com.sun.", "Lock File",
-                "font", "proxy", "Signature", "License",
-                "Running:", "Platform", "Java Info", "VM args",
-                "Log File", "Fatal Log", "Logging Status",
-                "Memory:", "Licence", "Locale:", "Time Zone",
-                "Checking Licence", "antialias", "SfRoboto",
-            ]):
+            if any(skip in line for skip in _SF_LOG_FILTERS):
                 continue
             if line.strip():
                 crawl_lines.append(line.strip())
@@ -694,9 +687,16 @@ async def export_crawl(
         for f in csv_files:
             try:
                 with open(f, "r", newline="", encoding="utf-8-sig") as fh:
+                    first_line = fh.readline()
+                    fh.seek(0)
                     reader = csv.reader(fh)
                     rows = sum(1 for _ in reader)
-                    total_data_rows += max(0, rows - 1)  # subtract header
+                    # Summary reports (crawl_overview.csv etc.) have no header row;
+                    # tabular CSVs do. Only subtract header for tabular files.
+                    if _is_sf_summary_report(first_line):
+                        total_data_rows += rows
+                    else:
+                        total_data_rows += max(0, rows - 1)
             except Exception:
                 pass
 

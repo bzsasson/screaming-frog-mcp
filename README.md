@@ -170,6 +170,8 @@ save_report: "Crawl Overview"
 | `SF_CLI_PATH` | Path to the Screaming Frog CLI executable | macOS default path |
 | `SF_ALLOWED_DOMAINS` | Comma-separated list of allowed crawl target domains. When set, `crawl_site` only accepts URLs matching these domains. | Empty (all domains allowed) |
 | `SF_CONFIG_DIR` | Directory containing `.seospiderconfig` files that `crawl_site` can load. | `~/.config/sf-mcp/configs/` |
+| `SF_EXPORT_TTL_SECONDS` | How long exported CSV files are kept before auto-cleanup. Increase for multi-hour audit sessions. | `3600` (1 hour) |
+| `SF_EXPORT_TIMEOUT_SECONDS` | Max time to wait for an `export_crawl` operation to complete. Increase for very large crawls (100k+ URLs). | `300` (5 minutes) |
 
 ### Filtering modes
 
@@ -183,7 +185,7 @@ save_report: "Crawl Overview"
 
 ## Temp file cleanup
 
-Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cleaned up after 1 hour.
+Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cleaned up after 1 hour (configurable via `SF_EXPORT_TTL_SECONDS`).
 
 ## Troubleshooting
 
@@ -193,7 +195,7 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 | Empty CSV exports (headers only, 0 data rows) | The GUI likely has the database locked — close it and re-export |
 | CLI not found | Check that `SF_CLI_PATH` in `.env` points to the correct executable |
 | Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing |
-| Export times out | Large crawls may need more time — try exporting fewer tabs |
+| Export times out | Large crawls may need more time — set `SF_EXPORT_TIMEOUT_SECONDS` to a higher value (e.g. `600`), or export fewer tabs |
 | `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uvx screaming-frog-mcp@latest` or `pip install -U screaming-frog-mcp` |
 
 ## License
