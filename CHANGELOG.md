@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 (2026-05-08)
+
+### Bug fixes
+
+- Fixed PyPI publish workflow: pinned SHA was the annotated tag object, not the commit. Docker image lookup failed.
+- Updated README: removed reference to removed `max_urls` parameter.
+
 ## 0.3.1 (2026-05-08)
 
 ### Bug fixes
