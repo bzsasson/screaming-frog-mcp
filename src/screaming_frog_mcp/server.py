@@ -512,6 +512,7 @@ async def crawl_status(crawl_id: str) -> str:
     # Extract useful info from logs
     urls_crawled = "unknown"
     save_failed = False
+    db_shutdown_seen = False
     fatal_error = None
     for line in log_output.splitlines():
         # SF logs: "Completed the spider of ... crawled N urls"
@@ -520,8 +521,16 @@ async def crawl_status(crawl_id: str) -> str:
             urls_crawled = match.group(1) if match else line.strip()
         if "crawl save failed" in line.lower():
             save_failed = True
+        if "shutdown database" in line.lower() and "projectinstancedata" in line.lower():
+            db_shutdown_seen = True
         if "FATAL" in line and fatal_error is None:
             fatal_error = line.strip()
+
+    # SF 23.2 logs "Crawl save failed {}" even when the crawl is saved
+    # successfully. Detect this false positive by checking for the database
+    # shutdown line that proves the data was written to disk.
+    if save_failed and db_shutdown_seen:
+        save_failed = False
 
     # Determine actual status -- SF can exit 0 even on FATAL errors
     if fatal_error and proc.returncode == 0:

@@ -22,6 +22,7 @@ def _parse_crawl_logs(log_output: str):
     """Replicate the log parsing from crawl_status."""
     urls_crawled = "unknown"
     save_failed = False
+    db_shutdown_seen = False
     fatal_error = None
     for line in log_output.splitlines():
         if "crawled" in line.lower() and "urls" in line.lower():
@@ -29,8 +30,13 @@ def _parse_crawl_logs(log_output: str):
             urls_crawled = match.group(1) if match else line.strip()
         if "crawl save failed" in line.lower():
             save_failed = True
+        if "shutdown database" in line.lower() and "projectinstancedata" in line.lower():
+            db_shutdown_seen = True
         if "FATAL" in line and fatal_error is None:
             fatal_error = line.strip()
+    # SF 23.2 false positive: warns "Crawl save failed {}" but data is saved
+    if save_failed and db_shutdown_seen:
+        save_failed = False
     return urls_crawled, save_failed, fatal_error
 
 
@@ -92,7 +98,8 @@ class TestFatalDetection:
 class TestSaveFailureDetection:
     """Tests for detecting crawl save failures."""
 
-    def test_detects_save_failure(self):
+    def test_detects_genuine_save_failure(self):
+        """Save failed without a database shutdown = genuine failure."""
         log = (
             "INFO  - Completed the spider of https://example.com/ crawled 4 urls\n"
             "WARN  - Crawl save failed {}\n"
@@ -101,7 +108,31 @@ class TestSaveFailureDetection:
         _, save_failed, _ = _parse_crawl_logs(log)
         assert save_failed is True
 
-    def test_no_false_positive(self):
+    def test_sf_232_false_positive_suppressed(self):
+        """SF 23.2 logs 'Crawl save failed {}' even when save succeeds.
+        If the database shutdown line is present, the save actually worked."""
+        log = (
+            "INFO  - Completed the spider of https://example.com/ crawled 4 urls\n"
+            "INFO  - saveCrawl in state: SpiderCrawlIdleState\n"
+            "WARN  - Crawl save failed {}\n"
+            "INFO  - Shutdown database, location: /Users/test/.ScreamingFrogSEOSpider/ProjectInstanceData/abc-123/results_xyz/sql\n"
+            "INFO  - Application Exited\n"
+        )
+        _, save_failed, _ = _parse_crawl_logs(log)
+        assert save_failed is False
+
+    def test_save_failed_without_projectinstancedata_is_genuine(self):
+        """Shutdown database line without ProjectInstanceData path = still a failure."""
+        log = (
+            "INFO  - Completed the spider of https://example.com/ crawled 4 urls\n"
+            "WARN  - Crawl save failed {}\n"
+            "INFO  - Shutdown database, location: /tmp/some-other-path/sql\n"
+            "INFO  - Application Exited\n"
+        )
+        _, save_failed, _ = _parse_crawl_logs(log)
+        assert save_failed is True
+
+    def test_no_false_positive_without_save_line(self):
         log = (
             "INFO  - About to run handler: SaveCrawlHandler\n"
             "INFO  - saveCrawl in state: SpiderCrawlIdleState\n"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 (2026-05-08)
+
+### Bug fixes
+
+- **Fixed false "Crawl save failed" warning on SF 23.2.** Screaming Frog 23.2 logs `WARN - Crawl save failed {}` even when the crawl saves successfully. The server now detects this false positive by checking for the database shutdown confirmation that proves data was written to disk. Genuine save failures (no database shutdown) still produce the warning.
+
 ## 0.3.2 (2026-05-08)
 
 ### Bug fixes
