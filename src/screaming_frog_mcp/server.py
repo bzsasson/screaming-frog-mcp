@@ -43,7 +43,6 @@ TEMP_EXPORT_BASE = Path.home() / ".cache" / "sf-mcp" / "exports"
 EXPORT_TTL_SECONDS = int(os.getenv("SF_EXPORT_TTL_SECONDS", "3600"))  # default 1 hour
 MAX_CONCURRENT_CRAWLS = 2
 MAX_ACTIVE_EXPORTS = 10
-MAX_CRAWL_SIZE = 100000
 MAX_READ_LIMIT = 1000
 MAX_INPUT_LENGTH = 2000
 MAX_CRAWL_DURATION = 7200  # 2 hours
@@ -332,16 +331,16 @@ async def crawl_site(
     url: str,
     config_file: Optional[str] = None,
     label: Optional[str] = None,
-    max_urls: Optional[int] = None,
 ) -> str:
     """
     Start a background Screaming Frog crawl that saves to SF's internal database.
 
     Args:
         url: The URL to crawl (e.g. https://example.com)
-        config_file: Optional path to a .seospiderconfig file for crawl settings
+        config_file: Optional path to a .seospiderconfig file for crawl settings.
+            To limit the number of URLs crawled, set the limit in a config file
+            (Configuration > Spider > Limits in the SF GUI) and pass it here.
         label: Optional label for identifying this crawl (e.g. 'freshgovjobs')
-        max_urls: Optional max number of URLs to crawl (overrides config)
 
     Returns:
         A crawl_id to use with crawl_status to check progress.
@@ -388,13 +387,6 @@ async def crawl_site(
         if not config_path.exists():
             return "ERROR: Config file not found."
         cmd.extend(["--config", str(config_path)])
-
-    if max_urls is not None and max_urls != 0:
-        if max_urls < 1:
-            return "ERROR: max_urls must be >= 1."
-        if max_urls > MAX_CRAWL_SIZE:
-            return f"ERROR: max_urls cannot exceed {MAX_CRAWL_SIZE}."
-        cmd.extend(["--max-crawl-size", str(int(max_urls))])
 
     try:
         # Write crawl output to temp log files instead of PIPE to avoid
@@ -487,11 +479,24 @@ async def crawl_status(crawl_id: str) -> str:
 
     # Extract useful info from logs
     urls_crawled = "unknown"
+    save_failed = False
+    fatal_error = None
     for line in log_output.splitlines():
-        if "urls crawled" in line.lower() or "crawl complete" in line.lower():
+        # SF logs: "Completed the spider of ... crawled N urls"
+        if "crawled" in line.lower() and "urls" in line.lower():
             urls_crawled = line.strip()
+        if "crawl save failed" in line.lower():
+            save_failed = True
+        if "FATAL" in line and fatal_error is None:
+            fatal_error = line.strip()
 
-    status = "completed" if proc.returncode == 0 else f"failed (exit code {proc.returncode})"
+    # Determine actual status -- SF can exit 0 even on FATAL errors
+    if fatal_error and proc.returncode == 0:
+        status = "failed"
+    elif proc.returncode == 0:
+        status = "completed"
+    else:
+        status = f"failed (exit code {proc.returncode})"
 
     result = (
         f"Crawl {crawl_id} {status}.\n"
@@ -501,17 +506,32 @@ async def crawl_status(crawl_id: str) -> str:
         f"URLs crawled: {urls_crawled}\n"
     )
 
-    if proc.returncode != 0:
+    if fatal_error:
+        result += f"\nFATAL: {fatal_error}\n"
+
+    if proc.returncode != 0 or fatal_error:
         # Show last 20 lines of filtered output for debugging
         filtered = _sanitize_sf_output(log_output)
         tail = "\n".join(filtered.strip().splitlines()[-20:])
         result += f"\nLast output:\n{tail}"
 
-    result += (
-        f"\n\nThe crawl is saved in SF's internal database.\n"
-        f"Use list_crawls() to see all saved crawls and get the DB ID.\n"
-        f"Then use export_crawl(db_id='...') to export data as CSV."
-    )
+    if save_failed:
+        result += (
+            f"\n\nWARNING: Crawl save failed. The crawl data may not be "
+            f"in SF's internal database. Check if the SF GUI has the "
+            f"database locked, or try again."
+        )
+    elif fatal_error:
+        result += (
+            f"\n\nThe crawl did not complete successfully. "
+            f"Check the error above and try again."
+        )
+    else:
+        result += (
+            f"\n\nThe crawl is saved in SF's internal database.\n"
+            f"Use list_crawls() to see all saved crawls and get the DB ID.\n"
+            f"Then use export_crawl(db_id='...') to export data as CSV."
+        )
 
     return result
 
@@ -936,6 +956,12 @@ def read_crawl_data(
                     break
 
             if not rows:
+                total_available = skipped  # rows that matched filter but were skipped by offset
+                if offset > 0 and total_available > 0:
+                    return (
+                        f"No rows at offset {offset} in {file} "
+                        f"(only {total_available} matching row{'s' if total_available != 1 else ''} total)."
+                    )
                 return f"No matching rows in {file}."
 
             # Format as text table
