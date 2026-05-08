@@ -403,6 +403,38 @@ async def crawl_site(
         )
 
         crawl_label = label or url.replace("https://", "").replace("http://", "").split("/")[0]
+
+        # Wait briefly to catch immediate startup failures (bad flags, license
+        # issues, etc.). SF FATAL errors happen in the first 1-2 seconds.
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            pass  # still running -- that's the normal case
+
+        if proc.returncode is not None:
+            # Process already exited -- check for FATAL
+            stdout_log.close()
+            stderr_log.close()
+            early_output = ""
+            for name in ("stdout.log", "stderr.log"):
+                log_file = log_dir / name
+                if log_file.exists():
+                    try:
+                        early_output += log_file.read_text(encoding="utf-8", errors="replace")
+                    except Exception:
+                        pass
+            fatal_line = None
+            for line in early_output.splitlines():
+                if "FATAL" in line:
+                    fatal_line = line.strip()
+                    break
+            if fatal_line:
+                return f"ERROR: Crawl failed to start.\n{fatal_line}"
+            return (
+                f"ERROR: Crawl exited immediately (exit code {proc.returncode}). "
+                f"Check SF installation and license."
+            )
+
         _running_crawls[crawl_id] = {
             "proc": proc,
             "url": url,
@@ -484,7 +516,8 @@ async def crawl_status(crawl_id: str) -> str:
     for line in log_output.splitlines():
         # SF logs: "Completed the spider of ... crawled N urls"
         if "crawled" in line.lower() and "urls" in line.lower():
-            urls_crawled = line.strip()
+            match = re.search(r"crawled\s+(\d+)\s+urls", line, re.IGNORECASE)
+            urls_crawled = match.group(1) if match else line.strip()
         if "crawl save failed" in line.lower():
             save_failed = True
         if "FATAL" in line and fatal_error is None:

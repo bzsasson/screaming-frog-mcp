@@ -25,7 +25,8 @@ def _parse_crawl_logs(log_output: str):
     fatal_error = None
     for line in log_output.splitlines():
         if "crawled" in line.lower() and "urls" in line.lower():
-            urls_crawled = line.strip()
+            match = re.search(r"crawled\s+(\d+)\s+urls", line, re.IGNORECASE)
+            urls_crawled = match.group(1) if match else line.strip()
         if "crawl save failed" in line.lower():
             save_failed = True
         if "FATAL" in line and fatal_error is None:
@@ -37,18 +38,18 @@ class TestUrlCountParsing:
     """Tests for extracting URLs crawled from SF log output."""
 
     def test_parses_real_sf_format(self):
-        """SF logs 'crawled N urls', not 'N urls crawled'."""
+        """SF logs 'crawled N urls', not 'N urls crawled'. Should extract just the number."""
         log = (
             "INFO  - Running: Screaming Frog SEO Spider 23.2\n"
             "INFO  - Completed the spider of https://example.com/ in 0 hrs 0 mins 11 secs (11578), null, crawled 4 urls\n"
         )
         urls_crawled, _, _ = _parse_crawl_logs(log)
-        assert "crawled 4 urls" in urls_crawled
+        assert urls_crawled == "4"
 
     def test_parses_large_crawl(self):
         log = "INFO  - Completed the spider of https://big.example.com/ in 1 hrs 23 mins 45 secs, null, crawled 55796 urls\n"
         urls_crawled, _, _ = _parse_crawl_logs(log)
-        assert "55796" in urls_crawled
+        assert urls_crawled == "55796"
 
     def test_unknown_when_no_crawl_line(self):
         log = "INFO  - Application Started\nINFO  - Application Exited\n"

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1 (2026-05-08)
+
+### Bug fixes
+
+- **Removed broken `max_urls` parameter from `crawl_site`.** The `--max-crawl-size` CLI flag doesn't exist in Screaming Frog. The parameter silently failed (SF exits 0 with FATAL). To limit crawl size, pass a config file via `config_file` instead.
+- **Fixed `crawl_status` always showing "URLs crawled: unknown".** The parser looked for "urls crawled" but SF logs "crawled N urls". Now extracts the numeric count.
+- **Fixed `crawl_status` falsely claiming "saved in SF's internal database"** when SF logged a FATAL error on startup or "Crawl save failed". Now detects both conditions and reports them accurately.
+- **Fixed `read_crawl_data` showing "No matching rows"** when offset exceeds total rows. Now shows "No rows at offset N (only M matching rows total)".
+
+### Improvements
+
+- `crawl_site` now detects immediate startup failures (FATAL errors, bad flags, license issues) within 2 seconds and returns an error instead of falsely reporting the crawl as started.
+- Pinned `pypa/gh-action-pypi-publish` to v1.14.0 SHA for supply chain safety.
+- Added 40 new tests (172 total): sf_check parsing, env var configuration, error format consistency, row count logic, crawl status parsing, offset behavior.
+
 ## 0.3.0 (2026-05-08)
 
 ### Bug fixes
