@@ -728,6 +728,83 @@ async def export_crawl(
         return "ERROR: Failed to export crawl."
 
 
+def _is_sf_summary_report(first_line: str) -> bool:
+    """Detect whether a CSV file is an SF summary report (e.g. crawl_overview.csv).
+
+    SF summary reports are vertical key-value layouts, not tabular CSVs.
+    The first row is always a two-cell pair like: "Site Crawled","https://..."
+    """
+    try:
+        cells = next(csv.reader([first_line]))
+    except (csv.Error, StopIteration):
+        return False
+    return (
+        len(cells) == 2
+        and cells[0].strip().lower() == "site crawled"
+    )
+
+
+def _read_sf_summary_report(f, target: Path, export_dir: Path) -> str:
+    """Parse an SF summary report (crawl_overview.csv and similar) into readable text.
+
+    These files have:
+    - Header key-value pairs (2 cells): "Site Crawled","https://example.com/"
+    - Section headers (1 cell): "Internal"
+    - Data rows (3-5 cells): "label","count","percent","total","description"
+    - Blank rows separating sections
+    """
+    reader = csv.reader(f)
+    output = f"File: {target.relative_to(export_dir)}\n"
+    output += "(Screaming Frog summary report)\n\n"
+
+    current_section = None
+
+    for row in reader:
+        # Skip empty rows
+        if not row or all(cell.strip() == "" for cell in row):
+            continue
+
+        cells = [cell.strip() for cell in row]
+
+        # Key-value header pair (exactly 2 non-empty cells).
+        # These appear at the top of the file before any section headers.
+        # Once we hit a section, 2-cell rows don't appear.
+        if len(cells) == 2 and cells[0] and cells[1] and current_section is None:
+            output += f"{cells[0]}: {cells[1]}\n"
+            continue
+
+        # Section header (single non-empty cell, not a number)
+        if len(cells) == 1 or (len(cells) >= 1 and all(c == "" for c in cells[1:])):
+            label = cells[0]
+            if label and not label.replace(",", "").replace(".", "").isdigit():
+                current_section = label
+                output += f"\n=== {label} ===\n"
+                continue
+
+        # Sub-header row (e.g. "Summary","URLs","% of Total",...)
+        # Detect by checking if it looks like column names (no pure-number cells)
+        if len(cells) >= 3 and not any(
+            c.replace(",", "").replace(".", "").replace("%", "").isdigit()
+            for c in cells if c
+        ):
+            # This is a column header row within the report; skip it
+            # (the data rows below are self-describing enough)
+            continue
+
+        # Data row: label, count, percent, and optionally total + description
+        if len(cells) >= 3:
+            label = cells[0]
+            count = cells[1]
+            pct = cells[2]
+            output += f"  {label}: {count} ({pct})\n"
+            continue
+
+        # Fallback: render whatever we got
+        output += "  " + " | ".join(cells) + "\n"
+
+    return output
+
+
 @mcp.tool()
 def read_crawl_data(
     export_id: str,
@@ -811,6 +888,16 @@ def read_crawl_data(
 
     try:
         with open(target, "r", encoding="utf-8-sig") as f:
+            # Detect SF summary report format (e.g. crawl_overview.csv).
+            # These files are vertical key-value layouts with section headers
+            # and blank rows, NOT row-oriented tabular CSVs. The first row
+            # is a reliable signal: two cells like "Site Crawled","https://..."
+            first_line = f.readline()
+            f.seek(0)
+
+            if _is_sf_summary_report(first_line):
+                return _read_sf_summary_report(f, target, export_dir)
+
             reader = csv.DictReader(f)
 
             # Validate filter_column exists in headers
@@ -875,9 +962,9 @@ def read_crawl_data(
 
             return output
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to read export data")
-        return f"ERROR: Failed to read {safe_file}."
+        return f"ERROR: Failed to read {safe_file}: {type(exc).__name__}: {exc}"
 
 
 @mcp.tool()
