@@ -40,13 +40,14 @@ SF_CLI_PATH = os.getenv(
 
 SF_DATA_DIR = Path.home() / ".ScreamingFrogSEOSpider" / "ProjectInstanceData"
 TEMP_EXPORT_BASE = Path.home() / ".cache" / "sf-mcp" / "exports"
-EXPORT_TTL_SECONDS = 3600  # 1 hour
+EXPORT_TTL_SECONDS = int(os.getenv("SF_EXPORT_TTL_SECONDS", "3600"))  # default 1 hour
 MAX_CONCURRENT_CRAWLS = 2
 MAX_ACTIVE_EXPORTS = 10
 MAX_CRAWL_SIZE = 100000
 MAX_READ_LIMIT = 1000
 MAX_INPUT_LENGTH = 2000
 MAX_CRAWL_DURATION = 7200  # 2 hours
+EXPORT_TIMEOUT_SECONDS = int(os.getenv("SF_EXPORT_TIMEOUT_SECONDS", "300"))  # default 5 min
 
 # Optional domain allowlist for crawl targets (env var, comma-separated)
 _allowed_domains_raw = os.getenv("SF_ALLOWED_DOMAINS", "")
@@ -294,13 +295,15 @@ def sf_check() -> str:
         return "ERROR: Screaming Frog CLI not found. Check SF_CLI_PATH in .env."
 
     try:
+        # Use --list-crawls (read-only, works even with GUI running) because
+        # --help doesn't emit version or license info in its output.
         result = subprocess.run(
-            [SF_CLI_PATH, "--headless", "--help"],
+            [SF_CLI_PATH, "--headless", "--list-crawls"],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=30,
+            timeout=60,
         )
         output = result.stdout + result.stderr
 
@@ -320,8 +323,8 @@ def sf_check() -> str:
         )
     except subprocess.TimeoutExpired:
         return "Screaming Frog CLI found but timed out during check."
-    except Exception:
-        return "ERROR: Could not check Screaming Frog installation."
+    except Exception as exc:
+        return f"ERROR: Could not check Screaming Frog installation: {type(exc).__name__}: {exc}"
 
 
 @mcp.tool()
@@ -425,9 +428,9 @@ async def crawl_site(
             f"Label: {crawl_label}\n\n"
             f"Use crawl_status(crawl_id='{crawl_id}') to check progress."
         )
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to start crawl")
-        return "ERROR: Failed to start crawl."
+        return f"ERROR: Failed to start crawl: {type(exc).__name__}: {exc}"
 
 
 @mcp.tool()
@@ -576,9 +579,9 @@ def list_crawls() -> str:
 
     except subprocess.TimeoutExpired:
         return "ERROR: Timed out listing crawls (60s limit)."
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to list crawls")
-        return "ERROR: Failed to list crawls."
+        return f"ERROR: Failed to list crawls: {type(exc).__name__}: {exc}"
 
 
 @mcp.tool()
@@ -652,7 +655,7 @@ async def export_crawl(
         )
 
         stdout_raw, stderr_raw = await asyncio.wait_for(
-            proc.communicate(), timeout=300
+            proc.communicate(), timeout=EXPORT_TIMEOUT_SECONDS
         )
         stdout = stdout_raw.decode("utf-8", errors="replace")
         stderr = stderr_raw.decode("utf-8", errors="replace")
@@ -719,13 +722,16 @@ async def export_crawl(
             f"DB ID: {db_id}\n\n"
             f"Files:\n" + "\n".join(file_list) + "\n\n"
             f"Use read_crawl_data(export_id='{export_id}', file='filename.csv') to read data.\n"
-            f"Files auto-delete after 1 hour."
+            f"Files auto-delete after {EXPORT_TTL_SECONDS // 60} minutes."
         )
     except asyncio.TimeoutError:
-        return "ERROR: Export timed out (5 minute limit). The crawl may be very large."
-    except Exception:
+        return (
+            f"ERROR: Export timed out ({EXPORT_TIMEOUT_SECONDS}s limit). "
+            f"The crawl may be very large. Set SF_EXPORT_TIMEOUT_SECONDS to increase."
+        )
+    except Exception as exc:
         logger.exception("Failed to export crawl")
-        return "ERROR: Failed to export crawl."
+        return f"ERROR: Failed to export crawl: {type(exc).__name__}: {exc}"
 
 
 def _is_sf_summary_report(first_line: str) -> bool:
@@ -1009,9 +1015,9 @@ def delete_crawl(db_id: str) -> str:
 
     except subprocess.TimeoutExpired:
         return "ERROR: Delete timed out (60s limit)."
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to delete crawl")
-        return "ERROR: Failed to delete crawl."
+        return f"ERROR: Failed to delete crawl: {type(exc).__name__}: {exc}"
 
 
 @mcp.tool()
@@ -1054,7 +1060,8 @@ def storage_summary() -> str:
 
     if temp_count > 0:
         result += f"\nTemp exports: {temp_count} dirs, {_format_size(temp_size)}"
-        result += " (auto-cleaned after 1 hour)"
+        ttl_str = f"{EXPORT_TTL_SECONDS // 3600}h" if EXPORT_TTL_SECONDS >= 3600 else f"{EXPORT_TTL_SECONDS // 60}m"
+        result += f" (auto-cleaned after {ttl_str})"
 
     return result
 
