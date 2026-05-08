@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 (2026-05-08)
+
+### Bug fixes
+
+- Fixed `read_crawl_data` failing on Screaming Frog summary reports (`crawl_overview.csv` and similar `--save-report` exports). These files use a vertical key-value layout with section headers, not tabular CSVs -- `csv.DictReader` would misparse them and the error was silently swallowed.
+- Fixed `sf_check` returning "Version: unknown / License: unknown" on working installs. The `--help` flag doesn't emit version or license info; switched to `--list-crawls` (read-only) which does.
+- Fixed `export_crawl` data row count undercounting summary report files (no header row to subtract).
+- Fixed duplicated log filter list in `list_crawls` that could drift from the shared `_SF_LOG_FILTERS` constant.
+
+### Improvements
+
+- All error messages now include the exception type and message instead of opaque "Failed to ..." strings. Affects `crawl_site`, `list_crawls`, `export_crawl`, `delete_crawl`, `read_crawl_data`, and `sf_check`.
+- `SF_EXPORT_TTL_SECONDS` env var: configure how long exported CSV files are kept before auto-cleanup (default: 3600s / 1 hour). Useful for multi-hour audit sessions.
+- `SF_EXPORT_TIMEOUT_SECONDS` env var: configure max wait time for `export_crawl` operations (default: 300s / 5 minutes). Increase for very large crawls (100k+ URLs).
+
+### New features
+
+- Summary report parsing: `read_crawl_data` now detects and properly renders SF summary reports (e.g. `crawl_overview.csv`) as structured, readable text with section headers and key-value pairs.
+
 ## 0.2.2 (2026-04-22)
 
 ### Bug fixes
