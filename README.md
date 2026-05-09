@@ -2,6 +2,10 @@
 
 An MCP (Model Context Protocol) server that gives Claude (or any MCP-compatible client) programmatic access to [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/) — crawl websites, export crawl data, and manage your crawl storage, all from your AI assistant.
 
+## See it in action
+
+The [Pre-Launch Website Audit](https://github.com/bzsasson/pre-launch-audit-skill) skill for Claude Code uses this MCP server as its primary crawl engine. It runs 5 coordinated sub-audits (technical SEO, AI accessibility, security, performance, on-page SEO) and leans on Screaming Frog for site-wide crawl data, custom extractions, and bulk analysis across all URLs. Good example of what you can build on top of this server.
+
 ## Prerequisites
 
 1. **Screaming Frog SEO Spider** installed on your machine (tested with v23.x, should work with v16+).
