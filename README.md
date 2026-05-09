@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server that gives Claude (or any MCP-compatible 
 
 ## See it in action
 
-The [Pre-Launch Website Audit](https://github.com/bzsasson/pre-launch-audit-skill) skill for Claude Code uses this MCP server as its primary crawl engine. It runs 5 coordinated sub-audits (technical SEO, AI accessibility, security, performance, on-page SEO) and leans on Screaming Frog for site-wide crawl data, custom extractions, and bulk analysis across all URLs. Good example of what you can build on top of this server.
+The [Pre-Launch Website Audit](https://github.com/bzsasson/pre-launch-audit-skill) skill for Claude Code uses this MCP server for its technical SEO and on-page audits -- site-wide crawl data, custom extractions, bulk analysis across all URLs. The skill runs 5 coordinated sub-audits and works without SF (bash fallbacks), but Screaming Frog is the biggest upgrade for crawl-dependent checks.
 
 ## Prerequisites
 
