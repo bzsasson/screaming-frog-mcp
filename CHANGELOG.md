@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 (2026-06-11)
+
+### Documentation
+
+- **Added TROUBLESHOOTING.md** — step-by-step diagnostic guide for "Could not attach to MCP server" connection failures: manual server test, MCP handshake check, client log locations, and a symptom table.
+- **README setup now recommends `uv tool install` over `uvx` in MCP client configs.** Launching via `uvx` downloads the package environment at startup, which on a cold cache can exceed the client's 60-second initialize timeout and cause intermittent attach failures.
+- Synced `server.json` (MCP registry manifest) version, which was stuck at 0.1.0.
+
 ## 0.3.3 (2026-05-08)
 
 ### Bug fixes

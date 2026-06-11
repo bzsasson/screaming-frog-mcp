@@ -3,7 +3,7 @@
   "name": "io.github.bzsasson/screaming-frog-mcp",
   "title": "Screaming Frog SEO Spider MCP Server",
   "description": "Crawl websites, export SEO data, and manage crawls via Screaming Frog SEO Spider.",
-  "version": "0.1.0",
+  "version": "0.3.4",
   "repository": {
     "url": "https://github.com/bzsasson/screaming-frog-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "screaming-frog-mcp",
-      "version": "0.1.0",
+      "version": "0.3.4",
       "transport": {
         "type": "stdio"
       },
