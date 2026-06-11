@@ -33,15 +33,21 @@ If you forget to close the GUI, the server will detect it and show a clear error
 
 ### Option A: Install from PyPI (recommended)
 
+Install as a persistent [uv tool](https://docs.astral.sh/uv/guides/tools/) so the server starts instantly:
+
+```bash
+uv tool install screaming-frog-mcp
+```
+
+This puts a `screaming-frog-mcp` executable on your PATH (typically `~/.local/bin/screaming-frog-mcp`). Update later with `uv tool upgrade screaming-frog-mcp`.
+
+Alternatively, install with pip:
+
 ```bash
 pip install screaming-frog-mcp
 ```
 
-Or run directly with `uvx` (no install needed):
-
-```bash
-uvx screaming-frog-mcp
-```
+> **Avoid `uvx screaming-frog-mcp` in MCP client configs.** `uvx` resolves and downloads the package environment at launch — on a cold cache this can exceed the client's 60-second initialize timeout, causing intermittent "Could not attach to MCP server" errors. A persistent install never touches the network at startup.
 
 ### Option B: Clone and install from source
 
@@ -67,14 +73,14 @@ If you cloned the repo, copy `.env.example` to `.env` and edit it.
 
 ### Add to Claude Code
 
-If installed via pip/uvx:
+If installed via `uv tool install` or pip:
 
 ```json
 {
   "mcpServers": {
     "screaming-frog": {
-      "command": "uvx",
-      "args": ["screaming-frog-mcp"],
+      "command": "/path/to/screaming-frog-mcp",
+      "args": [],
       "env": {
         "SF_CLI_PATH": "/path/to/ScreamingFrogSEOSpiderLauncher"
       }
@@ -82,6 +88,8 @@ If installed via pip/uvx:
   }
 }
 ```
+
+Find the executable path with `which screaming-frog-mcp` (e.g. `~/.local/bin/screaming-frog-mcp` for uv tool installs). Use the full absolute path — GUI apps don't inherit your shell's PATH.
 
 If cloned from source:
 
@@ -98,14 +106,14 @@ If cloned from source:
 
 ### Add to Claude Desktop
 
-Add to your Claude Desktop config (`claude_desktop_config.json`):
+Add to your Claude Desktop config (`claude_desktop_config.json`), using the same absolute executable path:
 
 ```json
 {
   "mcpServers": {
     "screaming-frog": {
-      "command": "uvx",
-      "args": ["screaming-frog-mcp"],
+      "command": "/path/to/screaming-frog-mcp",
+      "args": [],
       "env": {
         "SF_CLI_PATH": "/path/to/ScreamingFrogSEOSpiderLauncher"
       }
@@ -113,6 +121,8 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
   }
 }
 ```
+
+Restart Claude Desktop after editing the config.
 
 ## Available Tools
 
@@ -200,7 +210,8 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 | CLI not found | Check that `SF_CLI_PATH` in `.env` points to the correct executable |
 | Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing |
 | Export times out | Large crawls may need more time — set `SF_EXPORT_TIMEOUT_SECONDS` to a higher value (e.g. `600`), or export fewer tabs |
-| `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uvx screaming-frog-mcp@latest` or `pip install -U screaming-frog-mcp` |
+| `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uv tool upgrade screaming-frog-mcp` or `pip install -U screaming-frog-mcp` |
+| "Could not attach to MCP server" / initialize timeout | Your config launches the server via `uvx`, which downloads dependencies at startup and can exceed the 60s handshake timeout on a cold cache. Switch to a persistent install (`uv tool install screaming-frog-mcp`) and point `command` at the installed executable — see [Setup](#setup) |
 
 ## License
 
