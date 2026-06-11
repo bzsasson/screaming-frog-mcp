@@ -1,26 +1,26 @@
 # Screaming Frog SEO Spider MCP Server (headless)
 
-A headless MCP (Model Context Protocol) server for [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/). It drives the SF command line and saved crawl database directly, so Claude (or any MCP-compatible client) can run crawls, export crawl data, and analyze the results with the Screaming Frog GUI closed — on your laptop, on a server, or inside scheduled audits and CI pipelines.
+A headless MCP (Model Context Protocol) server for [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/). It drives the SF command line and saved crawl database directly, so Claude (or any MCP-compatible client) can run crawls, export crawl data, and analyze the results with the Screaming Frog GUI closed: on your laptop, on a server, or inside scheduled audits and CI pipelines.
 
-This is a community project, not affiliated with Screaming Frog. Since SEO Spider v24 there is also an official MCP built into the app — the two work differently and solve different problems.
+This is a community project, not affiliated with Screaming Frog. Since SEO Spider v24 there is also an official MCP built into the app. The two work differently and solve different problems.
 
 ## How this differs from the official Screaming Frog MCP
 
-Screaming Frog shipped an [official MCP server in SEO Spider v24](https://www.screamingfrog.co.uk/blog/seo-spider-24/). It's substantial: around 29 tools covering crawl control (start, pause, resume, progress), reports and bulk exports with field selection, URL-level inspection, screenshots, embeddings exports, and optionally a Node.js script runner with npm and filesystem read/write tools. It runs in two modes — a Streamable HTTP server inside the open app, or a STDIO mode where the MCP client launches the Spider itself, headless. Setup is documented for [Claude Desktop and LM Studio](https://www.screamingfrog.co.uk/seo-spider/user-guide/configuration/#mcp-server).
+Screaming Frog shipped an [official MCP server in SEO Spider v24](https://www.screamingfrog.co.uk/blog/seo-spider-24/). It's substantial: around 29 tools covering crawl control (start, pause, resume, progress), reports and bulk exports with field selection, URL-level inspection, screenshots, embeddings exports, and optionally a Node.js script runner with npm and filesystem read/write tools. It runs in two modes, either a Streamable HTTP server inside the open app, or a STDIO mode where the MCP client launches the Spider itself, headless. Setup is documented for [Claude Desktop and LM Studio](https://www.screamingfrog.co.uk/seo-spider/user-guide/configuration/#mcp-server).
 
-If you want maximum capability in an interactive session — visualizations, crawl comparison, screenshots, scripted post-processing of exports — use the official MCP. It does far more, and it's maintained by the vendor.
+If you want maximum capability in an interactive session (visualizations, crawl comparison, screenshots, scripted post-processing of exports), use the official MCP. It does far more, and it's maintained by the vendor.
 
 This server makes a different trade: it's a small, deliberately limited wrapper around SF's CLI and the saved crawl database, built for runs where nobody is watching.
 
-**Locked-down by design.** Eight read-and-export tools, nothing else. No script runner, no `npm install`, no filesystem write access — the official MCP offers all three, and its own docs note that enabling the Node runtime "allows the execution of arbitrary code on your system" and should only be granted to a fully trusted client. There's also an `SF_ALLOWED_DOMAINS` allowlist to restrict what an agent is able to crawl. When an agent runs unattended on a schedule, a tool surface this small is a feature.
+**Locked-down by design.** Eight read-and-export tools, nothing else. No script runner, no `npm install`, no filesystem write access. The official MCP offers all three, and its own docs note that enabling the Node runtime "allows the execution of arbitrary code on your system" and should only be granted to a fully trusted client. There's also an `SF_ALLOWED_DOMAINS` allowlist to restrict what an agent is able to crawl. When an agent runs unattended on a schedule, a tool surface this small is a feature.
 
-**Installs anywhere, plainly.** A pip/uv-installable Python package with a one-line stdio config on any MCP client — Claude Code, Cursor, whatever — on macOS, Linux, or Windows. The official STDIO mode ships as a Claude Desktop extension (`.mcpb`); the HTTP mode means opening the app and starting the server from its settings.
+**Installs anywhere, plainly.** A pip/uv-installable Python package with a one-line stdio config on any MCP client (Claude Code, Cursor, whatever) on macOS, Linux, or Windows. The official STDIO mode ships as a Claude Desktop extension (`.mcpb`); the HTTP mode means opening the app and starting the server from its settings.
 
 **Light process model.** Screaming Frog only runs while a tool actually needs it. The official server *is* the Spider application running for the whole session, whichever mode you pick.
 
 **A few tools the official set doesn't have:** `delete_crawl` and `storage_summary` for cleaning up SF's crawl database (their `sf_clear_crawl` clears a paused crawl, it doesn't manage stored ones), regex filtering across any column of any export via `read_crawl_data`, and `sf_check` pre-flight diagnostics that catch license problems and GUI database locks before you waste a crawl.
 
-Typical split: crawl interactively in the GUI with your full config, close it, and let this server handle the unattended side — scheduled audits, CI checks, agents querying the saved data. Both need a licensed Screaming Frog install on the same machine; neither is a cloud crawler. Note that this server requires the GUI to be closed (SF's database allows one process at a time).
+Typical split: crawl interactively in the GUI with your full config, close it, and let this server handle the unattended side. That covers scheduled audits, CI checks, and agents querying the saved data. Both need a licensed Screaming Frog install on the same machine; neither is a cloud crawler. Note that this server requires the GUI to be closed (SF's database allows one process at a time).
 
 ## See it in action
 
@@ -28,7 +28,7 @@ The [Pre-Launch Website Audit](https://github.com/bzsasson/pre-launch-audit-skil
 
 ## Prerequisites
 
-1. **Screaming Frog SEO Spider** installed on your machine (tested with v23.x, should work with v16+).
+1. **Screaming Frog SEO Spider** installed on your machine (tested with v23.x and v24.x, should work with v16+).
    Download from: https://www.screamingfrog.co.uk/seo-spider/
 
 2. **A valid Screaming Frog license.** The free version has a 500-URL crawl limit. Most MCP features (headless CLI, saving/loading crawls, exports) require a paid license.
@@ -67,7 +67,7 @@ Alternatively, install with pip:
 pip install screaming-frog-mcp
 ```
 
-> **Avoid `uvx screaming-frog-mcp` in MCP client configs.** `uvx` resolves and downloads the package environment at launch — on a cold cache this can exceed the client's 60-second initialize timeout, causing intermittent "Could not attach to MCP server" errors. A persistent install never touches the network at startup.
+> **Avoid `uvx screaming-frog-mcp` in MCP client configs.** `uvx` resolves and downloads the package environment at launch. On a cold cache this can exceed the client's 60-second initialize timeout, causing intermittent "Could not attach to MCP server" errors. A persistent install never touches the network at startup.
 
 ### Option B: Clone and install from source
 
@@ -109,7 +109,7 @@ If installed via `uv tool install` or pip:
 }
 ```
 
-Find the executable path with `which screaming-frog-mcp` (e.g. `~/.local/bin/screaming-frog-mcp` for uv tool installs). Use the full absolute path — GUI apps don't inherit your shell's PATH.
+Find the executable path with `which screaming-frog-mcp` (e.g. `~/.local/bin/screaming-frog-mcp` for uv tool installs). Use the full absolute path, since GUI apps don't inherit your shell's PATH.
 
 If cloned from source:
 
@@ -223,7 +223,7 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 
 ## Troubleshooting
 
-> **Server won't connect at all?** ("Could not attach to MCP server", "failed to connect") — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for a step-by-step diagnostic guide: testing the server manually, verifying the MCP handshake, and finding your client's logs.
+> **Server won't connect at all?** ("Could not attach to MCP server", "failed to connect") See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for a step-by-step diagnostic guide: testing the server manually, verifying the MCP handshake, and finding your client's logs.
 
 | Problem | Solution |
 |---------|----------|
@@ -233,7 +233,7 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 | Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing |
 | Export times out | Large crawls may need more time — set `SF_EXPORT_TIMEOUT_SECONDS` to a higher value (e.g. `600`), or export fewer tabs |
 | `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uv tool upgrade screaming-frog-mcp` or `pip install -U screaming-frog-mcp` |
-| "Could not attach to MCP server" / initialize timeout | Your config launches the server via `uvx`, which downloads dependencies at startup and can exceed the 60s handshake timeout on a cold cache. Switch to a persistent install (`uv tool install screaming-frog-mcp`) and point `command` at the installed executable — see [Setup](#setup) |
+| "Could not attach to MCP server" / initialize timeout | Your config launches the server via `uvx`, which downloads dependencies at startup and can exceed the 60s handshake timeout on a cold cache. Switch to a persistent install (`uv tool install screaming-frog-mcp`) and point `command` at the installed executable, per [Setup](#setup) |
 
 ## License
 

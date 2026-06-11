@@ -2,12 +2,12 @@
 
 Start by identifying which kind of failure you have:
 
-- **Your MCP client can't connect** — messages like "Could not attach to MCP server screaming-frog", "failed to connect", or the server showing as disconnected in your client. Go to [Connection failures](#connection-failures).
-- **The server connects, but tools fail** — `sf_check`, exports, or crawls return errors. Go to [Tool errors](#tool-errors).
+- **Your MCP client can't connect.** Messages like "Could not attach to MCP server screaming-frog", "failed to connect", or the server showing as disconnected in your client. Go to [Connection failures](#connection-failures).
+- **The server connects, but tools fail.** `sf_check`, exports, or crawls return errors. Go to [Tool errors](#tool-errors).
 
 ## Connection failures
 
-A connection failure means your MCP client (Claude Code, Claude Desktop, etc.) couldn't launch the server process or didn't get a handshake response in time. The server code is almost never the culprit — it's usually the launch command, PATH, or a startup timeout.
+A connection failure means your MCP client (Claude Code, Claude Desktop, etc.) couldn't launch the server process or didn't get a handshake response in time. The server code is almost never the culprit. It's usually the launch command, PATH, or a startup timeout.
 
 ### Step 1: Run the configured command manually
 
@@ -17,9 +17,9 @@ Copy the exact `command` from your MCP config and run it in a terminal:
 /path/to/screaming-frog-mcp
 ```
 
-- **It sits silently waiting for input** — that's healthy. The server speaks JSON-RPC on stdin/stdout and prints nothing until the client talks to it. Press Ctrl+C and move to Step 2.
-- **`command not found` or `no such file or directory`** — the path in your config is wrong, or you used a bare command name like `uvx` or `screaming-frog-mcp`. GUI apps (Claude Desktop) do not inherit your shell's PATH, so bare names that work in your terminal can still fail in the client. Find the absolute path with `which screaming-frog-mcp` and put that in the config.
-- **A Python traceback** — the installed environment is broken. Reinstall: `uv tool install --force screaming-frog-mcp` (or `pip install --force-reinstall screaming-frog-mcp`).
+- **It sits silently waiting for input.** That's healthy. The server speaks JSON-RPC on stdin/stdout and prints nothing until the client talks to it. Press Ctrl+C and move to Step 2.
+- **`command not found` or `no such file or directory`.** The path in your config is wrong, or you used a bare command name like `uvx` or `screaming-frog-mcp`. GUI apps (Claude Desktop) do not inherit your shell's PATH, so bare names that work in your terminal can still fail in the client. Find the absolute path with `which screaming-frog-mcp` and put that in the config.
+- **A Python traceback.** The installed environment is broken. Reinstall: `uv tool install --force screaming-frog-mcp` (or `pip install --force-reinstall screaming-frog-mcp`).
 
 ### Step 2: Test the MCP handshake
 
@@ -29,7 +29,7 @@ Send an `initialize` request and confirm the server answers (macOS/Linux):
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}' | /path/to/screaming-frog-mcp
 ```
 
-A healthy server replies within a second or two with a JSON object containing `"serverInfo":{"name":"Screaming Frog SEO Spider",...}`. If you get that, the server is fine — the problem is in your client config or a startup timeout (see below).
+A healthy server replies within a second or two with a JSON object containing `"serverInfo":{"name":"Screaming Frog SEO Spider",...}`. If you get that, the server is fine and the problem is in your client config or a startup timeout (see below).
 
 ### Step 3: Check the client logs
 
@@ -43,7 +43,7 @@ The client logs say exactly why the connection failed.
 
 You can also run `claude --debug` or use the `/mcp` command inside Claude Code to see live connection status.
 
-**Claude Desktop** (macOS — on Windows look under `%APPDATA%\Claude\logs\`):
+**Claude Desktop** (macOS paths; on Windows look under `%APPDATA%\Claude\logs\`):
 
 ```
 ~/Library/Logs/Claude/mcp-server-screaming-frog.log
