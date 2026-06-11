@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.bzsasson/screaming-frog-mcp",
-  "title": "Screaming Frog SEO Spider MCP Server",
-  "description": "Crawl websites, export SEO data, and manage crawls via Screaming Frog SEO Spider.",
+  "title": "Screaming Frog SEO Spider MCP Server (headless)",
+  "description": "Headless control of Screaming Frog SEO Spider via its CLI: run crawls, export and filter crawl data, manage crawl storage. No GUI session required, unlike the official in-app MCP.",
   "version": "0.3.4",
   "repository": {
     "url": "https://github.com/bzsasson/screaming-frog-mcp",

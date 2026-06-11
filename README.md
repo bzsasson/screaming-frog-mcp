@@ -1,6 +1,30 @@
-# Screaming Frog SEO Spider MCP Server
+# Screaming Frog SEO Spider MCP Server (headless)
 
-An MCP (Model Context Protocol) server that gives Claude (or any MCP-compatible client) programmatic access to [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/), crawl websites, export crawl data, and manage your crawl storage, all from your AI assistant.
+A headless MCP (Model Context Protocol) server for [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/). It drives the SF command line and saved crawl database directly, so Claude (or any MCP-compatible client) can run crawls, export crawl data, and analyze the results with the Screaming Frog GUI closed — on your laptop, on a server, or inside scheduled audits and CI pipelines.
+
+This is a community project, not affiliated with Screaming Frog. Since SEO Spider v24 there is also an official MCP built into the app — the two work differently and solve different problems.
+
+## How this differs from the official Screaming Frog MCP
+
+Screaming Frog shipped an [official MCP server in SEO Spider v24](https://www.screamingfrog.co.uk/blog/seo-spider-24/). It runs inside the desktop application: you open the app, enable the MCP server (a local HTTP endpoint), and your AI client controls the live session. The application has to stay open the whole time.
+
+This server is the opposite. It talks to Screaming Frog's headless CLI and the saved crawl database, and it requires the GUI to be *closed* (SF's database only allows one process at a time). No desktop session, no open port, no Node runtime — just a Python process speaking stdio.
+
+In practice that means:
+
+**Use the official MCP when** you're at your machine with the app open and want to work interactively — start a crawl from chat, generate link-equity visualizations, auto-compare your last two crawls, or pull in Ahrefs data through SF's API integrations. None of that exists here.
+
+**Use this server when** there is no GUI session to attach to:
+
+- Scheduled or recurring audits (cron jobs, Claude Code scheduled agents) where nobody is around to open an app
+- CI pipelines and remote servers
+- Analyzing a crawl after the fact — run the crawl in the GUI with your full config, close it, then query the saved data
+- Large crawls where you need `read_crawl_data`'s pagination and regex filtering to pull specific rows instead of dumping whole CSVs into the model's context window
+- Housekeeping on the crawl database itself: `list_crawls`, `delete_crawl`, `storage_summary`
+
+A few things only this server currently does: pre-flight diagnostics (`sf_check` catches license problems and GUI database locks before you waste a crawl), filtered and paginated reads of any export, and crawl storage management. A few things only the official one does: visual outputs, crawl comparison, and live control of an open session.
+
+Both need a licensed Screaming Frog install on the same machine — neither is a cloud crawler. The two configs can coexist in the same MCP client; they just can't touch the database at the same moment, because the official one needs the app open and this one needs it closed.
 
 ## See it in action
 
