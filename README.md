@@ -203,6 +203,8 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 
 ## Troubleshooting
 
+> **Server won't connect at all?** ("Could not attach to MCP server", "failed to connect") — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for a step-by-step diagnostic guide: testing the server manually, verifying the MCP handshake, and finding your client's logs.
+
 | Problem | Solution |
 |---------|----------|
 | "GUI is already running" error | Quit the Screaming Frog application, then retry |
