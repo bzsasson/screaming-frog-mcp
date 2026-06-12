@@ -18,7 +18,7 @@ This server makes a different trade: it's a small, deliberately limited wrapper 
 
 **Light process model.** Screaming Frog only runs while a tool actually needs it. The official server *is* the Spider application running for the whole session, whichever mode you pick.
 
-**A few tools the official set doesn't have:** `delete_crawl` and `storage_summary` for cleaning up SF's crawl database (their `sf_clear_crawl` clears a paused crawl, it doesn't manage stored ones), regex filtering across any column of any export via `read_crawl_data`, and `sf_check` pre-flight diagnostics that catch license problems and GUI database locks before you waste a crawl.
+**A few tools the official set doesn't have:** `aggregate_crawl_data` for counts and distributions computed server-side (the official path to "how many 404s" is a full export, or a Node script), `delete_crawl` and `storage_summary` for cleaning up SF's crawl database (their `sf_clear_crawl` clears a paused crawl, it doesn't manage stored ones), regex filtering across any column of any export via `read_crawl_data`, and `sf_check` pre-flight diagnostics that catch license problems and GUI database locks before you waste a crawl.
 
 **What it feels like from chat.** The official server is stateful: you ask it to load a crawl by ID, the Spider holds it in memory for the session, and follow-up questions answer in under a second. The cost is that the session owns SF's database the whole conversation, and exports come back as full inline dumps unless the model saves files and writes Node scripts to slice them (the approach their own docs recommend for staying inside the context window). This server is stateless: each export spawns the SF CLI fresh, so the first answer on a crawl takes longer, but you can just ask ("list my crawls, export the latest one") without managing IDs or sessions, reads return only the filtered rows you asked for, and the database is released between calls. For "show me the 404s on a 100k-URL crawl", the difference is the whole export in context versus a page of matching rows.
 
@@ -155,7 +155,8 @@ Restart Claude Desktop after editing the config.
 | `crawl_status` | Check progress of a running crawl |
 | `list_crawls` | List all saved crawls with their Database IDs |
 | `export_crawl` | Export crawl data as CSV files (many export options available) |
-| `read_crawl_data` | Read exported CSV data with pagination and filtering |
+| `read_crawl_data` | Read exported CSV data with pagination, filtering, and column selection |
+| `aggregate_crawl_data` | Counts and group-by breakdowns over exported data ("how many 404s", "status code distribution") without reading rows into context |
 | `delete_crawl` | Permanently delete a crawl from the database |
 | `storage_summary` | Show disk usage of SF's crawl storage |
 

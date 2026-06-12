@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 (2026-06-12)
+
+### New
+
+- **`aggregate_crawl_data` tool.** Server-side counts and group-by breakdowns over export CSVs. "How many 404s" or "status code distribution" now costs a few lines of output instead of an export dump, with the same filter options as `read_crawl_data` applied before aggregation. No code execution involved.
+- **`columns` parameter on `read_crawl_data`.** Request a subset of columns (e.g. `"Address,Status Code"`) so wide exports like Internal:All do not flood the context window.
+- **`--version` and `--help` flags.** The binary previously spoke MCP on stdin no matter what; checking the installed version required `uv tool list`. Informational flags now answer and exit without starting the server, and unknown arguments fail loudly instead of being ignored.
+- **MCP tool annotations.** All read tools declare `readOnlyHint`, `delete_crawl` declares `destructiveHint`, and `crawl_site` declares `openWorldHint`. MCP clients surface these hints in permission prompts. `export_crawl` deliberately does not claim to be read-only: loading a crawl with a newer Screaming Frog migrates it one-way.
+
+### Internal
+
+- Extracted shared helpers for export file resolution and row filtering, used by both CSV tools.
+- 26 new tests (200 total).
+
 ## 0.3.4 (2026-06-11)
 
 ### Documentation
