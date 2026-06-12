@@ -18,6 +18,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -26,6 +27,7 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 load_dotenv()
 
@@ -284,7 +286,7 @@ _cleanup_old_exports()
 # --- Tools ---
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 def sf_check() -> str:
     """
     Verify that Screaming Frog SEO Spider is installed and the CLI is accessible.
@@ -326,7 +328,7 @@ def sf_check() -> str:
         return f"ERROR: Could not check Screaming Frog installation: {type(exc).__name__}: {exc}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=True))
 async def crawl_site(
     url: str,
     config_file: Optional[str] = None,
@@ -457,7 +459,7 @@ async def crawl_site(
         return f"ERROR: Failed to start crawl: {type(exc).__name__}: {exc}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 async def crawl_status(crawl_id: str) -> str:
     """
     Check the status of a running or completed crawl.
@@ -578,7 +580,7 @@ async def crawl_status(crawl_id: str) -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 def list_crawls() -> str:
     """
     List all crawls saved in Screaming Frog's internal database.
@@ -639,7 +641,7 @@ def list_crawls() -> str:
         return f"ERROR: Failed to list crawls: {type(exc).__name__}: {exc}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
 async def export_crawl(
     db_id: str,
     export_tabs: Optional[str] = None,
@@ -796,6 +798,83 @@ async def export_crawl(
         return f"ERROR: Failed to export crawl: {type(exc).__name__}: {exc}"
 
 
+def _compile_row_filter(filter_value, filter_mode):
+    """Validate filter args shared by read_crawl_data and aggregate_crawl_data.
+
+    Returns (mode, filter_value_as_str, compiled_regex_or_None, error_or_None).
+    """
+    mode = (filter_mode or "contains").lower()
+    if mode not in ("contains", "exact", "regex"):
+        return None, None, None, "ERROR: filter_mode must be 'contains', 'exact', or 'regex'"
+
+    if filter_value is not None:
+        filter_value = str(filter_value)
+
+    filter_regex = None
+    if mode == "regex" and filter_value:
+        try:
+            filter_regex = re.compile(filter_value, re.IGNORECASE)
+        except re.error as e:
+            return None, None, None, f"ERROR: Invalid regex pattern: {e}"
+
+    return mode, filter_value, filter_regex, None
+
+
+def _row_matches(row, filter_column, filter_value, mode, filter_regex) -> bool:
+    """Apply the shared row filter. Callers skip rows where this returns False."""
+    if not (filter_column and filter_value):
+        return True
+    cell = row.get(filter_column) or ""
+    if mode == "exact":
+        return cell.lower() == filter_value.lower()
+    if mode == "regex":
+        return bool(filter_regex.search(cell))
+    return filter_value.lower() in cell.lower()  # contains
+
+
+def _resolve_export_file(export_id: str, file: str):
+    """Resolve an export file path safely, shared by the CSV-reading tools.
+
+    Returns (target_path, export_dir, None) on success,
+    or (None, None, error_string) on failure.
+    """
+    if export_id not in _export_dirs:
+        active = ", ".join(_export_dirs.keys()) if _export_dirs else "none"
+        return None, None, f"Unknown export_id: {export_id}\nActive exports: {active}"
+
+    export_dir = _export_dirs[export_id]["path"]
+    if not export_dir.exists():
+        del _export_dirs[export_id]
+        return None, None, "Export directory has been cleaned up. Run export_crawl again."
+
+    # Sanitize: strip path separators and traversal attempts
+    safe_file = Path(file).name
+    target = export_dir / file
+    if not _path_is_contained(target, export_dir):
+        target = export_dir / safe_file
+
+    if not target.exists():
+        # Search subdirectories -- only use the safe filename, escape glob chars
+        escaped = glob.escape(safe_file)
+        matches = [f for f in export_dir.rglob(escaped)
+                   if _path_is_contained(f, export_dir) and not f.is_symlink()]
+        if not matches:
+            matches = [f for f in export_dir.rglob(f"*{escaped}*")
+                       if _path_is_contained(f, export_dir) and not f.is_symlink()]
+        if not matches:
+            available = [str(f.relative_to(export_dir)) for f in export_dir.rglob("*.csv")]
+            return None, None, (
+                f"File '{safe_file}' not found.\nAvailable files:\n"
+                + "\n".join(f"  {f}" for f in available)
+            )
+        target = matches[0]
+
+    if not _path_is_contained(target, export_dir):
+        return None, None, "ERROR: Invalid file path."
+
+    return target, export_dir, None
+
+
 def _is_sf_summary_report(first_line: str) -> bool:
     """Detect whether a CSV file is an SF summary report (e.g. crawl_overview.csv).
 
@@ -873,7 +952,7 @@ def _read_sf_summary_report(f, target: Path, export_dir: Path) -> str:
     return output
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 def read_crawl_data(
     export_id: str,
     file: str,
@@ -882,6 +961,7 @@ def read_crawl_data(
     filter_column: Optional[str] = None,
     filter_value: Optional[Union[str, int, float]] = None,
     filter_mode: Optional[str] = None,
+    columns: Optional[str] = None,
 ) -> str:
     """
     Read CSV data from an export. Use after export_crawl.
@@ -894,6 +974,9 @@ def read_crawl_data(
         filter_column: Optional column name to filter by
         filter_value: Optional value to match in the filter column
         filter_mode: How to match filter_value: "contains" (default, case-insensitive substring), "exact" (case-insensitive exact match), or "regex" (Python regex)
+        columns: Optional comma-separated column names to return. Wide exports
+            (Internal:All has dozens of columns) flood the context; request
+            just the ones you need, e.g. "Address,Status Code".
 
     Returns:
         CSV data as formatted text with column headers.
@@ -902,57 +985,14 @@ def read_crawl_data(
     limit = max(1, min(limit, MAX_READ_LIMIT))
     offset = max(0, offset)
 
-    # Validate filter_mode
-    mode = (filter_mode or "contains").lower()
-    if mode not in ("contains", "exact", "regex"):
-        return "ERROR: filter_mode must be 'contains', 'exact', or 'regex'"
+    mode, filter_value, filter_regex, err = _compile_row_filter(filter_value, filter_mode)
+    if err:
+        return err
 
-    # Coerce filter_value to string (MCP clients may send numbers as int/float)
-    if filter_value is not None:
-        filter_value = str(filter_value)
-
-    # Pre-compile regex if needed
-    filter_regex = None
-    if mode == "regex" and filter_value:
-        try:
-            filter_regex = re.compile(filter_value, re.IGNORECASE)
-        except re.error as e:
-            return f"ERROR: Invalid regex pattern: {e}"
-
-    if export_id not in _export_dirs:
-        active = ", ".join(_export_dirs.keys()) if _export_dirs else "none"
-        return f"Unknown export_id: {export_id}\nActive exports: {active}"
-
-    export_dir = _export_dirs[export_id]["path"]
-    if not export_dir.exists():
-        del _export_dirs[export_id]
-        return "Export directory has been cleaned up. Run export_crawl again."
-
-    # Find the file - try exact match first, then search
-    # Sanitize: strip path separators and traversal attempts
-    safe_file = Path(file).name  # extract just the filename, no directory components
-    target = export_dir / file
-    # Path traversal check
-    if not _path_is_contained(target, export_dir):
-        target = export_dir / safe_file  # fall back to just the filename
-
-    if not target.exists():
-        # Search subdirectories — only use the safe filename, escape glob chars
-        escaped = glob.escape(safe_file)
-        matches = [f for f in export_dir.rglob(escaped)
-                   if _path_is_contained(f, export_dir) and not f.is_symlink()]
-        if not matches:
-            # Try partial match with escaped filename
-            matches = [f for f in export_dir.rglob(f"*{escaped}*")
-                       if _path_is_contained(f, export_dir) and not f.is_symlink()]
-        if not matches:
-            available = [str(f.relative_to(export_dir)) for f in export_dir.rglob("*.csv")]
-            return f"File '{safe_file}' not found.\nAvailable files:\n" + "\n".join(f"  {f}" for f in available)
-        target = matches[0]
-
-    # Final containment check
-    if not _path_is_contained(target, export_dir):
-        return "ERROR: Invalid file path."
+    target, export_dir, err = _resolve_export_file(export_id, file)
+    if err:
+        return err
+    safe_file = Path(file).name
 
     try:
         with open(target, "r", encoding="utf-8-sig") as f:
@@ -973,21 +1013,25 @@ def read_crawl_data(
                 available = ", ".join(reader.fieldnames[:20])
                 return f"Column '{filter_column}' not found.\nAvailable columns: {available}"
 
+            # Validate requested output columns
+            selected_columns = None
+            if columns:
+                selected_columns = [c.strip() for c in columns.split(",") if c.strip()]
+                if reader.fieldnames:
+                    missing = [c for c in selected_columns if c not in reader.fieldnames]
+                    if missing:
+                        available = ", ".join(reader.fieldnames[:20])
+                        return (
+                            f"Column{'s' if len(missing) != 1 else ''} "
+                            f"{', '.join(repr(c) for c in missing)} not found.\n"
+                            f"Available columns: {available}"
+                        )
+
             rows = []
             skipped = 0
             for row in reader:
-                # Apply filter
-                if filter_column and filter_value:
-                    cell = row.get(filter_column, "")
-                    if mode == "exact":
-                        if cell.lower() != filter_value.lower():
-                            continue
-                    elif mode == "regex":
-                        if not filter_regex.search(cell):
-                            continue
-                    else:  # contains
-                        if filter_value.lower() not in cell.lower():
-                            continue
+                if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
+                    continue
 
                 if skipped < offset:
                     skipped += 1
@@ -1007,7 +1051,7 @@ def read_crawl_data(
                 return f"No matching rows in {file}."
 
             # Format as text table
-            columns = list(rows[0].keys())
+            columns = selected_columns or list(rows[0].keys())
 
             # Build output
             output = f"File: {target.relative_to(export_dir)}\n"
@@ -1041,7 +1085,100 @@ def read_crawl_data(
         return f"ERROR: Failed to read {safe_file}: {type(exc).__name__}: {exc}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+def aggregate_crawl_data(
+    export_id: str,
+    file: str,
+    group_by: Optional[str] = None,
+    top: int = 20,
+    filter_column: Optional[str] = None,
+    filter_value: Optional[Union[str, int, float]] = None,
+    filter_mode: Optional[str] = None,
+) -> str:
+    """
+    Aggregate CSV data from an export: row counts and group-by breakdowns.
+    Use instead of read_crawl_data when the question needs counts or a
+    distribution ("how many 404s", "status code breakdown") rather than
+    the rows themselves.
+
+    Args:
+        export_id: The export_id from export_crawl
+        file: CSV filename to aggregate (from the file list in export_crawl output)
+        group_by: Optional column name; counts rows per distinct value of it
+        top: Max distinct values to show, most common first (default 20, max 100)
+        filter_column: Optional column name to filter by before aggregating
+        filter_value: Optional value to match in the filter column
+        filter_mode: How to match filter_value: "contains" (default), "exact", or "regex"
+
+    Returns:
+        Total matching row count, plus per-value counts with percentages
+        when group_by is set.
+    """
+    top = max(1, min(top, 100))
+
+    mode, filter_value, filter_regex, err = _compile_row_filter(filter_value, filter_mode)
+    if err:
+        return err
+
+    target, export_dir, err = _resolve_export_file(export_id, file)
+    if err:
+        return err
+    safe_file = Path(file).name
+
+    try:
+        with open(target, "r", encoding="utf-8-sig") as f:
+            first_line = f.readline()
+            f.seek(0)
+            if _is_sf_summary_report(first_line):
+                return _read_sf_summary_report(f, target, export_dir)
+
+            reader = csv.DictReader(f)
+
+            if filter_column and reader.fieldnames and filter_column not in reader.fieldnames:
+                available = ", ".join(reader.fieldnames[:20])
+                return f"Column '{filter_column}' not found.\nAvailable columns: {available}"
+            if group_by and reader.fieldnames and group_by not in reader.fieldnames:
+                available = ", ".join(reader.fieldnames[:20])
+                return f"Column '{group_by}' not found.\nAvailable columns: {available}"
+
+            counts: dict = {}
+            total = 0
+            for row in reader:
+                if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
+                    continue
+                total += 1
+                if group_by:
+                    val = (row.get(group_by) or "").strip() or "(empty)"
+                    counts[val] = counts.get(val, 0) + 1
+
+            filt = ""
+            if filter_column and filter_value:
+                filt = f" (filtered: {filter_column} {mode} '{filter_value}')"
+
+            header = f"File: {target.relative_to(export_dir)}\n"
+            plural = "s" if total != 1 else ""
+
+            if not group_by:
+                return header + f"{total} matching row{plural}{filt}"
+
+            output = header + f"Total: {total} row{plural}{filt}\n"
+            output += f"Breakdown by {group_by}:\n"
+            ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            for val, n in ordered[:top]:
+                pct = (n / total * 100) if total else 0.0
+                display = val if len(val) <= 80 else val[:77] + "..."
+                output += f"  {display}: {n} ({pct:.1f}%)\n"
+            hidden = len(ordered) - top
+            if hidden > 0:
+                output += f"  ... and {hidden} more value{'s' if hidden != 1 else ''}. Increase top to see them.\n"
+            return output
+
+    except Exception as exc:
+        logger.exception("Failed to aggregate export data")
+        return f"ERROR: Failed to aggregate {safe_file}: {type(exc).__name__}: {exc}"
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False))
 def delete_crawl(db_id: str) -> str:
     """
     Delete a crawl from Screaming Frog's internal database to free disk space.
@@ -1088,7 +1225,7 @@ def delete_crawl(db_id: str) -> str:
         return f"ERROR: Failed to delete crawl: {type(exc).__name__}: {exc}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 def storage_summary() -> str:
     """
     Show disk usage of Screaming Frog's internal crawl storage.
@@ -1229,8 +1366,45 @@ def get_export_reference() -> str:
     return EXPORT_REFERENCE
 
 
-def main():
-    """Run the Screaming Frog MCP server."""
+_USAGE = """\
+screaming-frog-mcp: headless MCP server for Screaming Frog SEO Spider.
+
+Run with no arguments from an MCP client. The server speaks JSON-RPC on
+stdin/stdout and prints nothing until the client sends a request.
+
+Options:
+  -V, --version   Print the package version and exit
+  -h, --help      Show this message and exit
+
+Docs and troubleshooting: https://github.com/bzsasson/screaming-frog-mcp
+"""
+
+
+def main(argv=None):
+    """Run the Screaming Frog MCP server, or answer --version/--help."""
+    args = list(sys.argv[1:] if argv is None else argv)
+
+    if any(a in ("-V", "--version") for a in args):
+        from importlib.metadata import PackageNotFoundError, version
+        try:
+            pkg_version = version("screaming-frog-mcp")
+        except PackageNotFoundError:
+            pkg_version = "unknown (not installed as a package)"
+        print(f"screaming-frog-mcp {pkg_version}")
+        return
+
+    if any(a in ("-h", "--help") for a in args):
+        print(_USAGE)
+        return
+
+    if args:
+        print(
+            f"screaming-frog-mcp: unrecognized argument(s): {' '.join(args)}\n"
+            "Use --help for usage.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
     mcp.run()
 
 

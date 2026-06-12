@@ -25,6 +25,7 @@ from screaming_frog_mcp.server import (  # noqa: E402, F401
     _read_sf_summary_report,
     _export_dirs,
     read_crawl_data,
+    aggregate_crawl_data,
     EXPORT_REFERENCE,
     MAX_READ_LIMIT,
     MAX_INPUT_LENGTH,
