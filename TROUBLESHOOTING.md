@@ -68,7 +68,13 @@ For the full symptom table (empty exports, CLI not found, export timeouts, missi
 
 ## Checking and updating your version
 
-The server binary takes no `--version` flag (it immediately starts speaking MCP on stdin). Check the installed version with:
+From v0.4.0 the binary answers directly:
+
+```bash
+screaming-frog-mcp --version
+```
+
+On older versions there is no `--version` flag (the binary immediately speaks MCP on stdin); check with:
 
 ```bash
 uv tool list          # if installed as a uv tool

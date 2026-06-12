@@ -12,7 +12,7 @@ If you want maximum capability in an interactive session (visualizations, crawl 
 
 This server makes a different trade: it's a small, deliberately limited wrapper around SF's CLI and the saved crawl database, built for runs where nobody is watching.
 
-**Locked-down by design.** Eight read-and-export tools, nothing else. No script runner, no `npm install`, no filesystem write access. The official MCP offers all three, and its own docs note that enabling the Node runtime "allows the execution of arbitrary code on your system" and should only be granted to a fully trusted client. There's also an `SF_ALLOWED_DOMAINS` allowlist to restrict what an agent is able to crawl. When an agent runs unattended on a schedule, a tool surface this small is a feature.
+**Locked-down by design.** Nine read-and-export tools, nothing else. No script runner, no `npm install`, no filesystem write access. The official MCP offers all three, and its own docs note that enabling the Node runtime "allows the execution of arbitrary code on your system" and should only be granted to a fully trusted client. There's also an `SF_ALLOWED_DOMAINS` allowlist to restrict what an agent is able to crawl. When an agent runs unattended on a schedule, a tool surface this small is a feature.
 
 **Installs anywhere, plainly.** A pip/uv-installable Python package with a one-line stdio config on any MCP client (Claude Code, Cursor, whatever) on macOS, Linux, or Windows. The official STDIO mode ships as a Claude Desktop extension (`.mcpb`); the HTTP mode means opening the app and starting the server from its settings.
 
