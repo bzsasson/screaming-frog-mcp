@@ -11,15 +11,21 @@ the one that gets forgotten: bumping `server.json` in git does nothing until
    rejects longer ones with a 422.
 3. Add a CHANGELOG.md entry.
 4. Commit, tag `vX.Y.Z`, push.
-5. Publish to PyPI (build + upload, or the release workflow if one exists).
-6. Publish to the MCP registry:
+5. Publish to PyPI: create a GitHub release for the tag (`gh release create
+   vX.Y.Z`) — that triggers `.github/workflows/publish.yml`. The workflow can
+   also be re-run manually via `gh workflow run publish.yml` (it runs from
+   main, useful when the release-triggered run failed on a workflow bug).
+6. Publish to the MCP registry, after PyPI has the new version (the registry
+   validates the package version exists):
 
    ```
-   mcp-publisher login github   # only if the cached token expired
+   mcp-publisher login github
    mcp-publisher publish
    ```
 
-   Login uses a GitHub device code that must be approved in a browser.
+   The registry token expires within the hour, so expect to log in every
+   release. Login uses a GitHub device code approved in a browser, and the
+   final Authorize button requires a real human click.
 
 7. Verify both:
 
