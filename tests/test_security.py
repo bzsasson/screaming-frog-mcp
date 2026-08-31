@@ -152,6 +152,11 @@ class TestValidateCliArg:
         "Paginated 2+",
         "Content:Missing <head> Tag",
         "Content:Missing <body> Tag",
+        "Content:Soft 404 Inlinks",
+        "Directives:Unavailable_After Inlinks",
+        "AMP:Missing/Invalid <!doctype html> Tag",
+        "Accessibility:Role=text Should Have No Focusable Descendants",
+        "Links:All Inlinks,Content:Soft 404 Inlinks",
         "Internal:All,Response Codes:All,Page Titles:All,Meta Description:All,H1:All,H2:All,Images:All,Canonicals:All,Directives:All,Hreflang:All,JavaScript:All,Structured Data:All,Sitemaps:All,Content:All,Security:All",
     ])
     def test_valid_export_values_pass(self, value):
@@ -232,8 +237,8 @@ class TestExportReference:
         assert tab in EXPORT_REFERENCE
 
     @pytest.mark.parametrize("export", [
-        "All Inlinks", "All Outlinks", "All Anchor Text",
-        "Crawl Overview", "Redirect Chains",
+        "Links:All Inlinks", "Links:All Outlinks", "Links:All Anchor Text",
+        "Content:Soft 404 Inlinks", "Crawl Overview", "Redirects:Redirect Chains",
     ])
     def test_bulk_exports_documented(self, export):
         assert export in EXPORT_REFERENCE

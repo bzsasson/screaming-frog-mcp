@@ -1,6 +1,6 @@
 [project]
 name = "screaming-frog-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "Headless MCP server for Screaming Frog SEO Spider: run crawls, export and analyze crawl data via the CLI, no GUI session required. Built for scheduled audits, CI, and AI agents."
 readme = "README.md"
 license = "MIT"

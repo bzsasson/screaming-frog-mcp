@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1 (2026-08-31)
+
+### Fixed
+
+- **Export reference regenerated from the SF 24.1 CLI** (closes #11). The `screaming-frog://export-reference` resource listed ~27 bulk exports without submenu prefixes; the current CLI has 355, all submenu-prefixed (e.g. `Content:Soft 404 Inlinks`, `Links:All Inlinks`). Export names always passed through to the CLI, so exports like Soft 404 Inlinks worked all along — but anyone reading the stale reference would conclude they did not exist. The tabs and reports sections were regenerated the same way (33 tabs, 62 reports).
+- **Widened the export-name character allowlist** to accept `_`, `=` and `!`, which appear in valid SF export names (`Directives:Unavailable_After Inlinks`, `Accessibility:Role=text ...`, `AMP:Missing/Invalid <!doctype html> Tag`). These were the only names of the 355 the old pattern rejected.
+
+### Internal
+
+- Added RELEASING.md with the full version-bump checklist, including the MCP registry publish step that was previously skipped (registry sat at 0.1.0 while PyPI reached 0.4.0).
+- Tests for the newly-allowed export names (206 total).
+
 ## 0.4.0 (2026-06-12)
 
 ### New

@@ -70,7 +70,7 @@ DEFAULT_EXPORT_TABS = (
 # Derived from EXPORT_REFERENCE: alphanumeric, spaces, commas, colons, ampersands,
 # hyphens, dots, parens, plus signs, forward slashes, percent signs,
 # angle brackets (SF uses <head>, <body> in filter names).
-_CLI_ARG_PATTERN = re.compile(r'^[a-zA-Z0-9 ,:&\-\.\(\)\+/%<>]+$')
+_CLI_ARG_PATTERN = re.compile(r'^[a-zA-Z0-9 ,:&\-\.\(\)\+/%<>_=!]+$')
 
 # --- State ---
 
@@ -654,7 +654,7 @@ async def export_crawl(
     Args:
         db_id: The Database ID from list_crawls (e.g. '1234' or a crawl identifier)
         export_tabs: Comma-separated export tabs (default: Internal:All,Response Codes:All,Page Titles:All,Meta Description:All,H1:All,H2:All,Images:All,Canonicals:All,Directives:All). See the export-reference resource for all options.
-        bulk_export: Optional bulk export types (e.g. 'All Inlinks,All Outlinks')
+        bulk_export: Optional bulk export types (e.g. 'Links:All Inlinks,Content:Soft 404 Inlinks')
         save_report: Optional reports to save (e.g. 'Crawl Overview')
 
     Returns:
@@ -1288,75 +1288,474 @@ def _format_size(size_bytes: int) -> str:
 EXPORT_REFERENCE = """
 # Screaming Frog Export Reference
 
+Generated from the Screaming Frog SEO Spider 24.1.0 CLI (`--help export-tabs`,
+`--help bulk-export`, `--help save-report`). Names vary by SF version; the
+installed CLI help output is always authoritative.
+
 ## --export-tabs (Tab:Filter)
-Export data from the main crawl tabs. Format: "Tab:Filter" comma-separated.
+Export data from the main crawl tabs. Format: "Tab:Filter", comma-separated.
 
 ### Tabs and Filters:
-- Internal: All, HTML, JavaScript, CSS, Images, PDF, Flash, Other, Unknown
-- External: All, HTML, JavaScript, CSS, Images, PDF, Flash, Other, Unknown
-- Protocol: All, HTTP URLs, HTTPS URLs, HTTP Images, HTTPS Images
-- Response Codes: All, Blocked by Robots.txt, Blocked by User, No Response, 1xx, 2xx, 3xx, 4xx, 5xx
-- URL: All, Non ASCII Characters, Underscores, Uppercase, Parameters, Duplicate URLs, Over 115 Characters
-- Page Titles: All, Missing, Duplicate, Over 60 Characters, Below 30 Characters, Over 560 Pixels, Below 200 Pixels, Same as H1, Multiple
-- Meta Description: All, Missing, Duplicate, Over 155 Characters, Below 70 Characters, Over 990 Pixels, Below 400 Pixels, Multiple
-- Meta Keywords: All, Missing, Duplicate
-- H1: All, Missing, Duplicate, Over 70 Characters, Multiple
-- H2: All, Missing, Duplicate, Over 70 Characters, Multiple
-- Images: All, Over 100 KB, Missing Alt Text, Missing Alt Attribute, Alt Text Over 100 Characters
-- Canonicals: All, Contains Canonical, Self Referencing, Canonicalised, Missing, Multiple
-- Pagination: All, Contains Pagination, First Page, Paginated 2+, Paginated with rel=noindex
-- Directives: All, Index, Noindex, Follow, Nofollow, None, NoArchive, NoSnippet, Max-Snippet, Max-Image-Preview, Max-Video-Preview, NoODP, NoYDir, NoTranslate, Unavailable After, Refresh
-- Hreflang: All, Contains Hreflang, Non 200 Hreflang URLs, Unlinked Hreflang URLs, Missing Return Links, Inconsistent Language & Region, Non Canonical, Noindex
-- JavaScript: All, Frameworks & Libraries, JavaScript Files, Missing, Async, Defer, Async & Defer
-- Structured Data: All, Contains Structured Data, Missing, Validation Errors, Validation Warnings, Schema.org, JSON-LD, Microdata, RDFa
-- Sitemaps: All, URLs in Sitemap, URLs Not in Sitemap, Orphan URLs
-- AMP: All, AMP, Non AMP, Missing Non AMP
-- Content: All, Near Duplicates, Exact Duplicates
-- Security: All, HTTP URLs, Mixed Content, Form URL Insecure, Form on HTTP URL
-- Spelling & Grammar: All, Spelling Errors, Grammar Errors
+- AI: All, OpenAI Prompt 1, Ollama Prompt 1, Gemini Prompt 1, Anthropic Prompt 1, OpenAI Prompt 2, Ollama Prompt 2, Gemini Prompt 2, Anthropic Prompt 2, OpenAI Prompt 3, Ollama Prompt 3, Gemini Prompt 3, Anthropic Prompt 3, OpenAI Prompt 4, Ollama Prompt 4, Gemini Prompt 4, Anthropic Prompt 4, OpenAI Prompt 5, Ollama Prompt 5, Gemini Prompt 5, Anthropic Prompt 5, OpenAI Prompt 6, Ollama Prompt 6, Gemini Prompt 6, Anthropic Prompt 6, OpenAI Prompt 7, Ollama Prompt 7, Gemini Prompt 7, Anthropic Prompt 7, OpenAI Prompt 8, Ollama Prompt 8, Gemini Prompt 8, Anthropic Prompt 8, OpenAI Prompt 9, Ollama Prompt 9, Gemini Prompt 9, Anthropic Prompt 9, OpenAI Prompt 10, Ollama Prompt 10, Gemini Prompt 10, Anthropic Prompt 10, OpenAI Prompt 11, Ollama Prompt 11, Gemini Prompt 11, Anthropic Prompt 11, OpenAI Prompt 12, Ollama Prompt 12, Gemini Prompt 12, Anthropic Prompt 12, OpenAI Prompt 13, Ollama Prompt 13, Gemini Prompt 13, Anthropic Prompt 13, OpenAI Prompt 14, Ollama Prompt 14, Gemini Prompt 14, Anthropic Prompt 14, OpenAI Prompt 15, Ollama Prompt 15, Gemini Prompt 15, Anthropic Prompt 15, OpenAI Prompt 16, Ollama Prompt 16, Gemini Prompt 16, Anthropic Prompt 16, OpenAI Prompt 17, Ollama Prompt 17, Gemini Prompt 17, Anthropic Prompt 17, OpenAI Prompt 18, Ollama Prompt 18, Gemini Prompt 18, Anthropic Prompt 18, OpenAI Prompt 19, Ollama Prompt 19, Gemini Prompt 19, Anthropic Prompt 19, OpenAI Prompt 20, Ollama Prompt 20, Gemini Prompt 20, Anthropic Prompt 20, OpenAI Prompt 21, Ollama Prompt 21, Gemini Prompt 21, Anthropic Prompt 21, OpenAI Prompt 22, Ollama Prompt 22, Gemini Prompt 22, Anthropic Prompt 22, OpenAI Prompt 23, Ollama Prompt 23, Gemini Prompt 23, Anthropic Prompt 23, OpenAI Prompt 24, Ollama Prompt 24, Gemini Prompt 24, Anthropic Prompt 24, OpenAI Prompt 25, Ollama Prompt 25, Gemini Prompt 25, Anthropic Prompt 25, OpenAI Prompt 26, Ollama Prompt 26, Gemini Prompt 26, Anthropic Prompt 26, OpenAI Prompt 27, Ollama Prompt 27, Gemini Prompt 27, Anthropic Prompt 27, OpenAI Prompt 28, Ollama Prompt 28, Gemini Prompt 28, Anthropic Prompt 28, OpenAI Prompt 29, Ollama Prompt 29, Gemini Prompt 29, Anthropic Prompt 29, OpenAI Prompt 30, Ollama Prompt 30, Gemini Prompt 30, Anthropic Prompt 30, OpenAI Prompt 31, Ollama Prompt 31, Gemini Prompt 31, Anthropic Prompt 31, OpenAI Prompt 32, Ollama Prompt 32, Gemini Prompt 32, Anthropic Prompt 32, OpenAI Prompt 33, Ollama Prompt 33, Gemini Prompt 33, Anthropic Prompt 33, OpenAI Prompt 34, Ollama Prompt 34, Gemini Prompt 34, Anthropic Prompt 34, OpenAI Prompt 35, Ollama Prompt 35, Gemini Prompt 35, Anthropic Prompt 35, OpenAI Prompt 36, Ollama Prompt 36, Gemini Prompt 36, Anthropic Prompt 36, OpenAI Prompt 37, Ollama Prompt 37, Gemini Prompt 37, Anthropic Prompt 37, OpenAI Prompt 38, Ollama Prompt 38, Gemini Prompt 38, Anthropic Prompt 38, OpenAI Prompt 39, Ollama Prompt 39, Gemini Prompt 39, Anthropic Prompt 39, OpenAI Prompt 40, Ollama Prompt 40, Gemini Prompt 40, Anthropic Prompt 40, OpenAI Prompt 41, Ollama Prompt 41, Gemini Prompt 41, Anthropic Prompt 41, OpenAI Prompt 42, Ollama Prompt 42, Gemini Prompt 42, Anthropic Prompt 42, OpenAI Prompt 43, Ollama Prompt 43, Gemini Prompt 43, Anthropic Prompt 43, OpenAI Prompt 44, Ollama Prompt 44, Gemini Prompt 44, Anthropic Prompt 44, OpenAI Prompt 45, Ollama Prompt 45, Gemini Prompt 45, Anthropic Prompt 45, OpenAI Prompt 46, Ollama Prompt 46, Gemini Prompt 46, Anthropic Prompt 46, OpenAI Prompt 47, Ollama Prompt 47, Gemini Prompt 47, Anthropic Prompt 47, OpenAI Prompt 48, Ollama Prompt 48, Gemini Prompt 48, Anthropic Prompt 48, OpenAI Prompt 49, Ollama Prompt 49, Gemini Prompt 49, Anthropic Prompt 49, OpenAI Prompt 50, Ollama Prompt 50, Gemini Prompt 50, Anthropic Prompt 50, OpenAI Prompt 51, Ollama Prompt 51, Gemini Prompt 51, Anthropic Prompt 51, OpenAI Prompt 52, Ollama Prompt 52, Gemini Prompt 52, Anthropic Prompt 52, OpenAI Prompt 53, Ollama Prompt 53, Gemini Prompt 53, Anthropic Prompt 53, OpenAI Prompt 54, Ollama Prompt 54, Gemini Prompt 54, Anthropic Prompt 54, OpenAI Prompt 55, Ollama Prompt 55, Gemini Prompt 55, Anthropic Prompt 55, OpenAI Prompt 56, Ollama Prompt 56, Gemini Prompt 56, Anthropic Prompt 56, OpenAI Prompt 57, Ollama Prompt 57, Gemini Prompt 57, Anthropic Prompt 57, OpenAI Prompt 58, Ollama Prompt 58, Gemini Prompt 58, Anthropic Prompt 58, OpenAI Prompt 59, Ollama Prompt 59, Gemini Prompt 59, Anthropic Prompt 59, OpenAI Prompt 60, Ollama Prompt 60, Gemini Prompt 60, Anthropic Prompt 60, OpenAI Prompt 61, Ollama Prompt 61, Gemini Prompt 61, Anthropic Prompt 61, OpenAI Prompt 62, Ollama Prompt 62, Gemini Prompt 62, Anthropic Prompt 62, OpenAI Prompt 63, Ollama Prompt 63, Gemini Prompt 63, Anthropic Prompt 63, OpenAI Prompt 64, Ollama Prompt 64, Gemini Prompt 64, Anthropic Prompt 64, OpenAI Prompt 65, Ollama Prompt 65, Gemini Prompt 65, Anthropic Prompt 65, OpenAI Prompt 66, Ollama Prompt 66, Gemini Prompt 66, Anthropic Prompt 66, OpenAI Prompt 67, Ollama Prompt 67, Gemini Prompt 67, Anthropic Prompt 67, OpenAI Prompt 68, Ollama Prompt 68, Gemini Prompt 68, Anthropic Prompt 68, OpenAI Prompt 69, Ollama Prompt 69, Gemini Prompt 69, Anthropic Prompt 69, OpenAI Prompt 70, Ollama Prompt 70, Gemini Prompt 70, Anthropic Prompt 70, OpenAI Prompt 71, Ollama Prompt 71, Gemini Prompt 71, Anthropic Prompt 71, OpenAI Prompt 72, Ollama Prompt 72, Gemini Prompt 72, Anthropic Prompt 72, OpenAI Prompt 73, Ollama Prompt 73, Gemini Prompt 73, Anthropic Prompt 73, OpenAI Prompt 74, Ollama Prompt 74, Gemini Prompt 74, Anthropic Prompt 74, OpenAI Prompt 75, Ollama Prompt 75, Gemini Prompt 75, Anthropic Prompt 75, OpenAI Prompt 76, Ollama Prompt 76, Gemini Prompt 76, Anthropic Prompt 76, OpenAI Prompt 77, Ollama Prompt 77, Gemini Prompt 77, Anthropic Prompt 77, OpenAI Prompt 78, Ollama Prompt 78, Gemini Prompt 78, Anthropic Prompt 78, OpenAI Prompt 79, Ollama Prompt 79, Gemini Prompt 79, Anthropic Prompt 79, OpenAI Prompt 80, Ollama Prompt 80, Gemini Prompt 80, Anthropic Prompt 80, OpenAI Prompt 81, Ollama Prompt 81, Gemini Prompt 81, Anthropic Prompt 81, OpenAI Prompt 82, Ollama Prompt 82, Gemini Prompt 82, Anthropic Prompt 82, OpenAI Prompt 83, Ollama Prompt 83, Gemini Prompt 83, Anthropic Prompt 83, OpenAI Prompt 84, Ollama Prompt 84, Gemini Prompt 84, Anthropic Prompt 84, OpenAI Prompt 85, Ollama Prompt 85, Gemini Prompt 85, Anthropic Prompt 85, OpenAI Prompt 86, Ollama Prompt 86, Gemini Prompt 86, Anthropic Prompt 86, OpenAI Prompt 87, Ollama Prompt 87, Gemini Prompt 87, Anthropic Prompt 87, OpenAI Prompt 88, Ollama Prompt 88, Gemini Prompt 88, Anthropic Prompt 88, OpenAI Prompt 89, Ollama Prompt 89, Gemini Prompt 89, Anthropic Prompt 89, OpenAI Prompt 90, Ollama Prompt 90, Gemini Prompt 90, Anthropic Prompt 90, OpenAI Prompt 91, Ollama Prompt 91, Gemini Prompt 91, Anthropic Prompt 91, OpenAI Prompt 92, Ollama Prompt 92, Gemini Prompt 92, Anthropic Prompt 92, OpenAI Prompt 93, Ollama Prompt 93, Gemini Prompt 93, Anthropic Prompt 93, OpenAI Prompt 94, Ollama Prompt 94, Gemini Prompt 94, Anthropic Prompt 94, OpenAI Prompt 95, Ollama Prompt 95, Gemini Prompt 95, Anthropic Prompt 95, OpenAI Prompt 96, Ollama Prompt 96, Gemini Prompt 96, Anthropic Prompt 96, OpenAI Prompt 97, Ollama Prompt 97, Gemini Prompt 97, Anthropic Prompt 97, OpenAI Prompt 98, Ollama Prompt 98, Gemini Prompt 98, Anthropic Prompt 98, OpenAI Prompt 99, Ollama Prompt 99, Gemini Prompt 99, Anthropic Prompt 99, OpenAI Prompt 100, Ollama Prompt 100, Gemini Prompt 100, Anthropic Prompt 100
+- AMP: All, Non-200 Response, Missing Non-AMP Return Link, Missing Canonical to Non-AMP, Non-Indexable Canonical, Indexable, Non-Indexable, Missing <html amp> Tag, Missing/Invalid <!doctype html> Tag, Missing <head> Tag, Missing <body> Tag, Missing Canonical, Missing/Invalid <meta charset> Tag, Missing/Invalid <meta viewport> Tag, Missing/Invalid AMP Script, Missing/Invalid AMP Boilerplate, Contains Disallowed HTML, Other Validation Errors
+- Accessibility: All, Accessibility Score Poor, Accessibility Score Needs Improvement, Accessibility Score Good, Best Practice Violation, WCAG 2.0 A Violation, WCAG 2.0 AA Violation, WCAG 2.0 AAA Violation, WCAG 2.1 AA Violation, WCAG 2.2 AA Violation, Accesskey Attribute Value Must Be Unique, Ensure Elements Marked Presentational Are Ignored, Elements Must Not Have Tabindex Greater Than Zero, Scrollable Region Requires Keyboard Access, Skip-link Target Should Exist & Be Focusable, Required ARIA Attributes Must Be Provided, Role=text Should Have No Focusable Descendants, ARIA Attribute Must Be Used As Specified For Role, ARIA Attributes Require Valid Values, ARIA Attributes Require Valid Names, ARIA Commands Require Accessible Name, ARIA Dialog & Alertdialog Require Accessible Name, ARIA Input Fields Require Accessible Name, ARIA Meter Nodes Require Accessible Name, ARIA Progressbar Nodes Require Accessible Name, ARIA Role Should Be Appropriate For Element, ARIA Roles Must Be Contained By Required Parent, ARIA Roles Require Valid Values, ARIA Toggle Fields Require Accessible Name, ARIA Tooltip Nodes Require Accessible Name, ARIA Treeitem Nodes Require Accessible Name, Certain ARIA Roles Must Contain Specific Children, Deprecated ARIA Roles Must Not Be Used, Aria-braille Require Non-braille Equivalent, Aria-hidden Elements Contains Focusable Elements, Aria-hidden=true Must Not Be Used In <body>, Elements Must Only Use Permitted ARIA Attributes, Elements Must Use Allowed ARIA Attributes, IDs Used In ARIA & Labels Must Be Unique, Page Requires Means To Bypass Repeated Blocks, All Page Content Must Be Contained By Landmarks, Page Requires One Main Landmark, Page Must Not Have More Than One Banner Landmark, Banner Landmark Must Not Be In Another Landmark, Page Must Not Have Multiple Contentinfo Landmarks, Page Requires At Most One Main Landmark, Complementary Landmarks & Asides Must Be Top Level, Contentinfo Landmark Must Be Top Level Landmark, Main Landmark Must Not Be In Another Landmark, Landmarks Require Unique Role Or Accessible Name, Form <input> Elements Require Labels, Form Elements Should Have Visible Label, Form Field Must Not Have Multiple Label Elements, Autocomplete Attribute Must Be Used Correctly, Frames Require Title Attribute, Frames Require Unique Title Attribute, Frames Should Be Tested With axe-core, Frames With Focusable Content Must Not Use tabindex=-1, Page Must Contain <title>, Page Must Contain <h1>, Heading Levels Should Only Increase By One, Headings Should Not Be Empty, Meta Viewport Should Allow Zoom & Scale Up to 500%, Meta Viewport Zoom & Scaling Disabled, HTML Element Lang Attribute Value Must Be Valid, HTML Element Requires Lang Attribute, HTML Lang & XML Lang Value Should Match, Lang Attribute Requires Valid Value, Delayed Meta Refresh Must Not Be Used, Timed Meta Refresh Must Not Exist, Image Button Requires Alternate Text, Images Require Alternate Text, <object> Elements Require Alternate Text, Active <area> Elements Require Alternate Text, Alt Text Should Not Be Repeated As Text, Elements Marked role=img Require Alternate Text, SVG Images & Graphics Require Accessible Text, Server-Side Image Maps Must Not Be Used, <video> Elements Require <track> For Captions, <video> or <audio> Elements Must Not Auto-play, Buttons Require Discernible Text, Inline Text Spacing Must Be Adjustable, Input Buttons Require Discernible Text, Links Must Be Distinguishable, Links Require Discernible Text, Links With Same Accessible Name, Select Element Requires Accessible Name, Summary Elements Require Discernible Text, Deprecated <marquee> Element Must Not Be Used, <blink> Elements Deprecated & Must Not Be Used, Text Requires Higher Color Contrast Ratio, Text Requires Higher Color Contrast to Background, Touch Targets Require Sufficient Size & Spacing, Interactive Controls Must Not Be Nested, List Items Must Be Contained In List Elements, Lists Must Only Contain <li> Content Elements, <dl> Must Only Have Ordered <dt> & <dd> Groups, <dt> & <dd> Elements Must Be Contained by <dl>, <th> Element Requires Associated Data Cells, Table Header Attr Must Refer To Cell In Same Table, Table Headers Require Discernible Text, Table With Identical Summary & Caption Text, Scope Attribute Should Be Used Correctly On Tables
+- Analytics: All, Sessions Above 0, Bounce Rate Above 70%, No GA Data, Non-Indexable with GA Data, Orphan URLs
+- Canonicals: All, Contains Canonical, Self Referencing, Canonicalised, Missing, Multiple, Non-Indexable Canonical, Multiple Conflicting, Canonical Is Relative, Unlinked, Invalid Attribute In Annotation, Contains Fragment URL, Outside <head>
+- Change Detection: All, Word Count, Crawl Depth, Indexability, Page Titles, H1, Meta Description, Inlinks, Unique Inlinks, Internal Outlinks, Unique Internal Outlinks, External Outlinks, Unique External Outlinks, Structured Data Unique Types, Content
+- Content: All, Spelling Errors, Grammar Errors, Near Duplicates, Semantically Similar, Low Relevance Content, Exact Duplicates, Low Content Pages, Readability Difficult, Readability Very Difficult, Lorem Ipsum Placeholder, Soft 404 Pages
+- Custom Extraction: All, Extractor 1, Extractor 2, Extractor 3, Extractor 4, Extractor 5, Extractor 6, Extractor 7, Extractor 8, Extractor 9, Extractor 10, Extractor 11, Extractor 12, Extractor 13, Extractor 14, Extractor 15, Extractor 16, Extractor 17, Extractor 18, Extractor 19, Extractor 20, Extractor 21, Extractor 22, Extractor 23, Extractor 24, Extractor 25, Extractor 26, Extractor 27, Extractor 28, Extractor 29, Extractor 30, Extractor 31, Extractor 32, Extractor 33, Extractor 34, Extractor 35, Extractor 36, Extractor 37, Extractor 38, Extractor 39, Extractor 40, Extractor 41, Extractor 42, Extractor 43, Extractor 44, Extractor 45, Extractor 46, Extractor 47, Extractor 48, Extractor 49, Extractor 50, Extractor 51, Extractor 52, Extractor 53, Extractor 54, Extractor 55, Extractor 56, Extractor 57, Extractor 58, Extractor 59, Extractor 60, Extractor 61, Extractor 62, Extractor 63, Extractor 64, Extractor 65, Extractor 66, Extractor 67, Extractor 68, Extractor 69, Extractor 70, Extractor 71, Extractor 72, Extractor 73, Extractor 74, Extractor 75, Extractor 76, Extractor 77, Extractor 78, Extractor 79, Extractor 80, Extractor 81, Extractor 82, Extractor 83, Extractor 84, Extractor 85, Extractor 86, Extractor 87, Extractor 88, Extractor 89, Extractor 90, Extractor 91, Extractor 92, Extractor 93, Extractor 94, Extractor 95, Extractor 96, Extractor 97, Extractor 98, Extractor 99, Extractor 100
+- Custom JavaScript: All, Extractor 1, Extractor 2, Extractor 3, Extractor 4, Extractor 5, Extractor 6, Extractor 7, Extractor 8, Extractor 9, Extractor 10, Extractor 11, Extractor 12, Extractor 13, Extractor 14, Extractor 15, Extractor 16, Extractor 17, Extractor 18, Extractor 19, Extractor 20, Extractor 21, Extractor 22, Extractor 23, Extractor 24, Extractor 25, Extractor 26, Extractor 27, Extractor 28, Extractor 29, Extractor 30, Extractor 31, Extractor 32, Extractor 33, Extractor 34, Extractor 35, Extractor 36, Extractor 37, Extractor 38, Extractor 39, Extractor 40, Extractor 41, Extractor 42, Extractor 43, Extractor 44, Extractor 45, Extractor 46, Extractor 47, Extractor 48, Extractor 49, Extractor 50, Extractor 51, Extractor 52, Extractor 53, Extractor 54, Extractor 55, Extractor 56, Extractor 57, Extractor 58, Extractor 59, Extractor 60, Extractor 61, Extractor 62, Extractor 63, Extractor 64, Extractor 65, Extractor 66, Extractor 67, Extractor 68, Extractor 69, Extractor 70, Extractor 71, Extractor 72, Extractor 73, Extractor 74, Extractor 75, Extractor 76, Extractor 77, Extractor 78, Extractor 79, Extractor 80, Extractor 81, Extractor 82, Extractor 83, Extractor 84, Extractor 85, Extractor 86, Extractor 87, Extractor 88, Extractor 89, Extractor 90, Extractor 91, Extractor 92, Extractor 93, Extractor 94, Extractor 95, Extractor 96, Extractor 97, Extractor 98, Extractor 99, Extractor 100
+- Custom Search: All, Filter 1, Filter 2, Filter 3, Filter 4, Filter 5, Filter 6, Filter 7, Filter 8, Filter 9, Filter 10, Filter 11, Filter 12, Filter 13, Filter 14, Filter 15, Filter 16, Filter 17, Filter 18, Filter 19, Filter 20, Filter 21, Filter 22, Filter 23, Filter 24, Filter 25, Filter 26, Filter 27, Filter 28, Filter 29, Filter 30, Filter 31, Filter 32, Filter 33, Filter 34, Filter 35, Filter 36, Filter 37, Filter 38, Filter 39, Filter 40, Filter 41, Filter 42, Filter 43, Filter 44, Filter 45, Filter 46, Filter 47, Filter 48, Filter 49, Filter 50, Filter 51, Filter 52, Filter 53, Filter 54, Filter 55, Filter 56, Filter 57, Filter 58, Filter 59, Filter 60, Filter 61, Filter 62, Filter 63, Filter 64, Filter 65, Filter 66, Filter 67, Filter 68, Filter 69, Filter 70, Filter 71, Filter 72, Filter 73, Filter 74, Filter 75, Filter 76, Filter 77, Filter 78, Filter 79, Filter 80, Filter 81, Filter 82, Filter 83, Filter 84, Filter 85, Filter 86, Filter 87, Filter 88, Filter 89, Filter 90, Filter 91, Filter 92, Filter 93, Filter 94, Filter 95, Filter 96, Filter 97, Filter 98, Filter 99, Filter 100
+- Directives: All, Index, Noindex, Follow, Nofollow, None, NoArchive, NoSnippet, Max-Snippet, Max-Image-Preview, Max-Video-Preview, NoODP, NoYDIR, NoImageIndex, NoTranslate, Unavailable_After, Refresh, Outside <head>
+- External: All, HTML, JavaScript, CSS, Images, Plugins, Media, Fonts, XML, PDF, Other, Unknown
+- H1: All, Missing, Duplicate, Over X Characters, Multiple, Alt Text in H1, Non-Sequential
+- H2: All, Missing, Duplicate, Over X Characters, Multiple, Non-Sequential
+- Hreflang: All, Contains hreflang, Non-200 hreflang URLs, Unlinked hreflang URLs, Missing Return Links, Inconsistent Language & Region Return Links, Non-Canonical Return Links, Noindex Return Links, Incorrect Language & Region Codes, Multiple Entries, Missing Self Reference, Not Using Canonical, Missing X-Default, Missing, Outside <head>
+- Images: All, Over X kB, Missing Alt Text, Missing Alt Attribute, Alt Text Over X Characters, Background Images, Incorrectly Sized Images, Missing Size Attributes
+- Internal: All, HTML, JavaScript, CSS, Images, Plugins, Media, Fonts, XML, PDF, Other, Unknown
+- JavaScript: All, Uses Old AJAX Crawling Scheme URLs, Uses Old AJAX Crawling Scheme Meta Fragment Tag, Page Title Only in Rendered HTML, Page Title Updated by JavaScript, H1 Only in Rendered HTML, H1 Updated by JavaScript, Meta Description Only in Rendered HTML, Meta Description Updated by JavaScript, Canonical Only in Rendered HTML, Canonical Mismatch, Noindex Only in Original HTML, Nofollow Only in Original HTML, Contains JavaScript Links, Contains JavaScript Content, Pages with Blocked Resources, Pages with JavaScript Errors, Pages with JavaScript Warnings, Pages with Chrome Issues
+- Link Metrics: All
+- Links: All, Pages Without Internal Outlinks, Internal Nofollow Outlinks, Internal Outlinks With No Anchor Text, Non-Descriptive Anchor Text In Internal Outlinks, Pages With High External Outlinks, Pages With High Internal Outlinks, Follow & Nofollow Internal Inlinks To Page, Internal Nofollow Inlinks Only, Pages With High Crawl Depth, Outlinks To Localhost, Non-Indexable Page Inlinks Only, Pages With Uncrawlable Internal Outlinks
+- Meta Description: All, Missing, Duplicate, Over X Characters, Below X Characters, Over X Pixels, Below X Pixels, Multiple, Outside <head>
+- Meta Keywords: All, Missing, Duplicate, Multiple
+- Mobile: All, Viewport Not Set, Target Size, Content Not Sized Correctly, Illegible Font Size, Contains Unsupported Plugins, Mobile Alternate Link
+- Page Titles: All, Missing, Duplicate, Over X Characters, Below X Characters, Over X Pixels, Below X Pixels, Same as H1, Multiple, Outside <head>
+- PageSpeed: All, Minify CSS, Minify JavaScript, Reduce Unused CSS, Reduce Unused JavaScript, Reduce JavaScript Execution Time, Minimize Main-Thread Work, Request Errors, Layout Shift Culprits, Document Request Latency, Optimize DOM Size, Font Display, Improve Image Delivery, Legacy JavaScript, Render Blocking Requests, Use Efficient Cache Lifetimes, LCP Request Discovery, Forced Reflow, Avoid Enormous Network Payloads, Network Dependency Tree, Duplicated JavaScript
+- Pagination: All, Contains Pagination, First Page, Paginated 2+ Pages, Pagination URL Not in Anchor Tag, Non-200 Pagination URLs, Unlinked Pagination URLs, Non-Indexable, Multiple Pagination URLs, Pagination Loop, Sequence Error
+- Response Codes: All, Blocked by Robots.txt, Blocked Resource, No Response, Success (2xx), Redirection (3xx), Redirection (JavaScript), Redirection (Meta Refresh), Redirection (HTTP Refresh), Client Error (4xx), Server Error (5xx), Internal All, Internal Blocked by Robots.txt, Internal Blocked Resource, Internal No Response, Internal Success (2xx), Internal Redirection (3xx), Internal Redirection (JavaScript), Internal Redirection (Meta Refresh), Internal Redirection (HTTP Refresh), Internal Redirect Chain, Internal Redirect Loop, Internal Client Error (4xx), Internal Server Error (5xx), External All, External Blocked by Robots.txt, External Blocked Resource, External No Response, External Success (2xx), External Redirection (3xx), External Redirection (JavaScript), External Redirection (Meta Refresh), External Redirection (HTTP Refresh), External Client Error (4xx), External Server Error (5xx)
+- Search Console: All, Clicks Above 0, No Search Analytics Data, Non-Indexable with Search Analytics Data, Orphan URLs, URL is Not on Google, Indexable URL Not Indexed, URL is on Google But Has Issues, User-Declared Canonical Not Selected, Page is Not Mobile Friendly, AMP URL Invalid, Rich Result Invalid
+- Security: All, HTTP URLs, HTTPS URLs, Mixed Content, Form URL Insecure, Form on HTTP URL, Unsafe Cross-Origin Links, Missing HSTS Header, Bad Content Type, Missing X-Content-Type-Options Header, Missing X-Frame-Options Header, Protocol-Relative Resource Links, Missing Content-Security-Policy Header, Missing Secure Referrer-Policy Header
+- Sitemaps: All, URLs in Sitemap, URLs not in Sitemap, Orphan URLs, Non-Indexable URLs in Sitemap, URLs in Multiple Sitemaps, XML Sitemap with over 50k URLs, XML Sitemap over 50MB
+- Structured Data: All, Contains Structured Data, Missing, Validation Errors, Validation Warnings, Rich Result Validation Errors, Rich Result Validation Warnings, Parse Errors, Microdata URLs, JSON-LD URLs, RDFa URLs, Rich Result Feature Detected
+- URL: All, Non ASCII Characters, Underscores, Uppercase, Parameters, Over X Characters, Multiple Slashes, Repetitive Path, Contains Space, Broken Bookmark, Internal Search, GA Tracking Parameters
+- Validation: All, Invalid HTML Elements in <head>, <head> Not First In <html> Element, Missing <head> Tag, Multiple <head> Tags, Missing <body> Tag, Multiple <body> Tags, HTML Document Over XMB, Resource Over XMB, <body> Element Preceding <html>, High Carbon Rating
 
-## --bulk-export (Type)
-Export large datasets. Comma-separated list of export names (no Category: prefix).
-Example: --bulk-export "All Inlinks,All Outlinks"
+## --bulk-export (Submenu:Export)
+Export large datasets. Comma-separated. Names match the Bulk Export menu in the
+SF UI, with submenu prefixes (e.g. "Links:All Inlinks", "Content:Soft 404 Inlinks").
 
 Available exports:
-- All Links
-- All Inlinks
-- All Outlinks
-- All Anchor Text
-- Response Times
-- Cookies
-- Unique Content
-- Near Duplicates
-- Exact Duplicates
-- Contains
-- Does Not Contain
-- Canonicals
-- Hreflang
-- All Image Inlinks
-- All Image Outlinks
-- Missing Alt Tags
-- Alt Text Over 100
-- JavaScript Links
-- JavaScript Rendering
-- All Redirect Chains
-- HTTP Headers
-- All Sitemap URLs
-- All Structured Data
-- Validation Errors
-- Validation Warnings
-- Accessibility Issues
-- External Links
+- Queued URLs
+- Links:All Inlinks
+- Links:All Outlinks
+- Links:All Anchor Text
+- Links:External Links
+- Links:Pages With Uncrawlable Internal Outlinks
+- Links:Internal Nofollow Outlinks
+- Links:Internal Outlinks With No Anchor Text
+- Links:Non-Descriptive Anchor Text In Internal Outlinks
+- Links:Follow & Nofollow Internal Inlinks To Page
+- Links:Internal Nofollow Inlinks Only
+- Links:Outlinks To Localhost
+- Links:Non-Indexable Page Inlinks Only
+- Web:Screenshots
+- Web:Archived Website
+- Web:All Page Source
+- Web:All Page Text
+- Web:All PDF Documents
+- Web:All PDF Content
+- Web:All HTTP Request Headers
+- Web:All HTTP Response Headers
+- Web:All Cookies
+- Path Type:Absolute
+- Path Type:Protocol-Relative
+- Path Type:Root-Relative
+- Path Type:Path-Relative
+- Security:HTTP URLs Inlinks
+- Security:HTTPS URLs Inlinks
+- Security:Mixed Content
+- Security:Form URL Insecure
+- Security:Unsafe Cross-Origin Links
+- Security:Protocol-Relative Outlinks
+- Response Codes:Internal & External:Blocked by Robots.txt Inlinks
+- Response Codes:Internal & External:Blocked Resource Inlinks
+- Response Codes:Internal & External:No Response Inlinks
+- Response Codes:Internal & External:Success (2xx) Inlinks
+- Response Codes:Internal & External:Redirection (3xx) Inlinks
+- Response Codes:Internal & External:Redirection (JavaScript) Inlinks
+- Response Codes:Internal & External:Redirection (Meta Refresh) Inlinks
+- Response Codes:Internal & External:Redirection (HTTP Refresh) Inlinks
+- Response Codes:Internal & External:Client Error (4xx) Inlinks
+- Response Codes:Internal & External:Server Error (5xx) Inlinks
+- Response Codes:Internal & External:All Error (4xx 5xx & No Response) Inlinks
+- Response Codes:Internal:Internal Blocked by Robots.txt Inlinks
+- Response Codes:Internal:Internal Blocked Resource Inlinks
+- Response Codes:Internal:Internal No Response Inlinks
+- Response Codes:Internal:Internal Success (2xx) Inlinks
+- Response Codes:Internal:Internal Redirection (3xx) Inlinks
+- Response Codes:Internal:Internal Redirection (JavaScript) Inlinks
+- Response Codes:Internal:Internal Redirection (Meta Refresh) Inlinks
+- Response Codes:Internal:Internal Redirection (HTTP Refresh) Inlinks
+- Response Codes:Internal:Internal Redirect Chain Inlinks
+- Response Codes:Internal:Internal Redirect Loop Inlinks
+- Response Codes:Internal:Internal Client Error (4xx) Inlinks
+- Response Codes:Internal:Internal Server Error (5xx) Inlinks
+- Response Codes:Internal:Internal All Error (4xx 5xx & No Response) Inlinks
+- Response Codes:External:External Blocked by Robots.txt Inlinks
+- Response Codes:External:External Blocked Resource Inlinks
+- Response Codes:External:External No Response Inlinks
+- Response Codes:External:External Success (2xx) Inlinks
+- Response Codes:External:External Redirection (3xx) Inlinks
+- Response Codes:External:External Redirection (JavaScript) Inlinks
+- Response Codes:External:External Redirection (Meta Refresh) Inlinks
+- Response Codes:External:External Redirection (HTTP Refresh) Inlinks
+- Response Codes:External:External Client Error (4xx) Inlinks
+- Response Codes:External:External Server Error (5xx) Inlinks
+- Response Codes:External:External All Error (4xx 5xx & No Response) Inlinks
+- Content:Exact Duplicates
+- Content:Near Duplicates
+- Content:Semantically Similar
+- Content:Soft 404 Inlinks
+- Content:Spelling & Grammar Errors
+- Content:Spelling & Grammar Errors Summary
+- Images:All Image Inlinks
+- Images:Images Missing Alt Text Inlinks
+- Images:Images Missing Alt Attribute Inlinks
+- Images:Images Missing Alt Attribute & Text Inlinks
+- Images:Images Over X kB Inlinks
+- Images:Images with Alt Text Over X Characters
+- Images:Incorrectly Sized Images
+- Images:Missing Size Attributes
+- Canonicals:Contains Canonical Inlinks
+- Canonicals:Self Referencing Inlinks
+- Canonicals:Canonicalised Inlinks
+- Canonicals:Missing Inlinks
+- Canonicals:Multiple Inlinks
+- Canonicals:Multiple Conflicting Inlinks
+- Canonicals:Non-Indexable Canonical Inlinks
+- Canonicals:Canonical Is Relative Inlinks
+- Canonicals:Unlinked Inlinks
+- Canonicals:Invalid Attribute In Annotation Inlinks
+- Canonicals:Contains Fragment URL Inlinks
+- Canonicals:Outside <head> Inlinks
+- Directives:Index Inlinks
+- Directives:Noindex Inlinks
+- Directives:Follow Inlinks
+- Directives:Nofollow Inlinks
+- Directives:None Inlinks
+- Directives:NoArchive Inlinks
+- Directives:NoSnippet Inlinks
+- Directives:Max-Snippet Inlinks
+- Directives:Max-Image-Preview Inlinks
+- Directives:Max-Video-Preview Inlinks
+- Directives:NoODP Inlinks
+- Directives:NoYDIR Inlinks
+- Directives:NoImageIndex Inlinks
+- Directives:NoTranslate Inlinks
+- Directives:Unavailable_After Inlinks
+- Directives:Refresh Inlinks
+- Directives:Outside <head> Inlinks
+- JavaScript:Pages with Blocked Resources
+- JavaScript:Contains JavaScript Links
+- JavaScript:Pages with JavaScript Issues
+- AMP:All Inlinks
+- AMP:Non-200 Response Inlinks
+- AMP:Missing Non-AMP Return Link Inlinks
+- AMP:Missing Canonical to Non-AMP Inlinks
+- AMP:Non-Indexable Canonical Inlinks
+- AMP:Indexable Inlinks
+- AMP:Non-Indexable Inlinks
+- Structured Data:Contains Structured Data
+- Structured Data:Validation Errors
+- Structured Data:Validation Warnings
+- Structured Data:JSON-LD URLs
+- Structured Data:Microdata URLs
+- Structured Data:RDFa URLs
+- Sitemaps:URLs in Sitemap Inlinks
+- Sitemaps:Orphan URLs Inlinks
+- Sitemaps:Non-Indexable URLs in Sitemap Inlinks
+- Sitemaps:URLs in Multiple Sitemaps Inlinks
+- Custom Search:All Inlinks
+- Custom Search:Filter 1 Inlinks
+- Custom Search:Filter 2 Inlinks
+- Custom Search:Filter 3 Inlinks
+- Custom Search:Filter 4 Inlinks
+- Custom Search:Filter 5 Inlinks
+- Custom Search:Filter 6 Inlinks
+- Custom Search:Filter 7 Inlinks
+- Custom Search:Filter 8 Inlinks
+- Custom Search:Filter 9 Inlinks
+- Custom Search:Filter 10 Inlinks
+- Custom Search:Filter 11 Inlinks
+- Custom Search:Filter 12 Inlinks
+- Custom Search:Filter 13 Inlinks
+- Custom Search:Filter 14 Inlinks
+- Custom Search:Filter 15 Inlinks
+- Custom Search:Filter 16 Inlinks
+- Custom Search:Filter 17 Inlinks
+- Custom Search:Filter 18 Inlinks
+- Custom Search:Filter 19 Inlinks
+- Custom Search:Filter 20 Inlinks
+- Custom Search:Filter 21 Inlinks
+- Custom Search:Filter 22 Inlinks
+- Custom Search:Filter 23 Inlinks
+- Custom Search:Filter 24 Inlinks
+- Custom Search:Filter 25 Inlinks
+- Custom Search:Filter 26 Inlinks
+- Custom Search:Filter 27 Inlinks
+- Custom Search:Filter 28 Inlinks
+- Custom Search:Filter 29 Inlinks
+- Custom Search:Filter 30 Inlinks
+- Custom Search:Filter 31 Inlinks
+- Custom Search:Filter 32 Inlinks
+- Custom Search:Filter 33 Inlinks
+- Custom Search:Filter 34 Inlinks
+- Custom Search:Filter 35 Inlinks
+- Custom Search:Filter 36 Inlinks
+- Custom Search:Filter 37 Inlinks
+- Custom Search:Filter 38 Inlinks
+- Custom Search:Filter 39 Inlinks
+- Custom Search:Filter 40 Inlinks
+- Custom Search:Filter 41 Inlinks
+- Custom Search:Filter 42 Inlinks
+- Custom Search:Filter 43 Inlinks
+- Custom Search:Filter 44 Inlinks
+- Custom Search:Filter 45 Inlinks
+- Custom Search:Filter 46 Inlinks
+- Custom Search:Filter 47 Inlinks
+- Custom Search:Filter 48 Inlinks
+- Custom Search:Filter 49 Inlinks
+- Custom Search:Filter 50 Inlinks
+- Custom Search:Filter 51 Inlinks
+- Custom Search:Filter 52 Inlinks
+- Custom Search:Filter 53 Inlinks
+- Custom Search:Filter 54 Inlinks
+- Custom Search:Filter 55 Inlinks
+- Custom Search:Filter 56 Inlinks
+- Custom Search:Filter 57 Inlinks
+- Custom Search:Filter 58 Inlinks
+- Custom Search:Filter 59 Inlinks
+- Custom Search:Filter 60 Inlinks
+- Custom Search:Filter 61 Inlinks
+- Custom Search:Filter 62 Inlinks
+- Custom Search:Filter 63 Inlinks
+- Custom Search:Filter 64 Inlinks
+- Custom Search:Filter 65 Inlinks
+- Custom Search:Filter 66 Inlinks
+- Custom Search:Filter 67 Inlinks
+- Custom Search:Filter 68 Inlinks
+- Custom Search:Filter 69 Inlinks
+- Custom Search:Filter 70 Inlinks
+- Custom Search:Filter 71 Inlinks
+- Custom Search:Filter 72 Inlinks
+- Custom Search:Filter 73 Inlinks
+- Custom Search:Filter 74 Inlinks
+- Custom Search:Filter 75 Inlinks
+- Custom Search:Filter 76 Inlinks
+- Custom Search:Filter 77 Inlinks
+- Custom Search:Filter 78 Inlinks
+- Custom Search:Filter 79 Inlinks
+- Custom Search:Filter 80 Inlinks
+- Custom Search:Filter 81 Inlinks
+- Custom Search:Filter 82 Inlinks
+- Custom Search:Filter 83 Inlinks
+- Custom Search:Filter 84 Inlinks
+- Custom Search:Filter 85 Inlinks
+- Custom Search:Filter 86 Inlinks
+- Custom Search:Filter 87 Inlinks
+- Custom Search:Filter 88 Inlinks
+- Custom Search:Filter 89 Inlinks
+- Custom Search:Filter 90 Inlinks
+- Custom Search:Filter 91 Inlinks
+- Custom Search:Filter 92 Inlinks
+- Custom Search:Filter 93 Inlinks
+- Custom Search:Filter 94 Inlinks
+- Custom Search:Filter 95 Inlinks
+- Custom Search:Filter 96 Inlinks
+- Custom Search:Filter 97 Inlinks
+- Custom Search:Filter 98 Inlinks
+- Custom Search:Filter 99 Inlinks
+- Custom Search:Filter 100 Inlinks
+- Custom Extraction:All Inlinks
+- Custom Extraction:Extractor 1 Inlinks
+- Custom Extraction:Extractor 2 Inlinks
+- Custom Extraction:Extractor 3 Inlinks
+- Custom Extraction:Extractor 4 Inlinks
+- Custom Extraction:Extractor 5 Inlinks
+- Custom Extraction:Extractor 6 Inlinks
+- Custom Extraction:Extractor 7 Inlinks
+- Custom Extraction:Extractor 8 Inlinks
+- Custom Extraction:Extractor 9 Inlinks
+- Custom Extraction:Extractor 10 Inlinks
+- Custom Extraction:Extractor 11 Inlinks
+- Custom Extraction:Extractor 12 Inlinks
+- Custom Extraction:Extractor 13 Inlinks
+- Custom Extraction:Extractor 14 Inlinks
+- Custom Extraction:Extractor 15 Inlinks
+- Custom Extraction:Extractor 16 Inlinks
+- Custom Extraction:Extractor 17 Inlinks
+- Custom Extraction:Extractor 18 Inlinks
+- Custom Extraction:Extractor 19 Inlinks
+- Custom Extraction:Extractor 20 Inlinks
+- Custom Extraction:Extractor 21 Inlinks
+- Custom Extraction:Extractor 22 Inlinks
+- Custom Extraction:Extractor 23 Inlinks
+- Custom Extraction:Extractor 24 Inlinks
+- Custom Extraction:Extractor 25 Inlinks
+- Custom Extraction:Extractor 26 Inlinks
+- Custom Extraction:Extractor 27 Inlinks
+- Custom Extraction:Extractor 28 Inlinks
+- Custom Extraction:Extractor 29 Inlinks
+- Custom Extraction:Extractor 30 Inlinks
+- Custom Extraction:Extractor 31 Inlinks
+- Custom Extraction:Extractor 32 Inlinks
+- Custom Extraction:Extractor 33 Inlinks
+- Custom Extraction:Extractor 34 Inlinks
+- Custom Extraction:Extractor 35 Inlinks
+- Custom Extraction:Extractor 36 Inlinks
+- Custom Extraction:Extractor 37 Inlinks
+- Custom Extraction:Extractor 38 Inlinks
+- Custom Extraction:Extractor 39 Inlinks
+- Custom Extraction:Extractor 40 Inlinks
+- Custom Extraction:Extractor 41 Inlinks
+- Custom Extraction:Extractor 42 Inlinks
+- Custom Extraction:Extractor 43 Inlinks
+- Custom Extraction:Extractor 44 Inlinks
+- Custom Extraction:Extractor 45 Inlinks
+- Custom Extraction:Extractor 46 Inlinks
+- Custom Extraction:Extractor 47 Inlinks
+- Custom Extraction:Extractor 48 Inlinks
+- Custom Extraction:Extractor 49 Inlinks
+- Custom Extraction:Extractor 50 Inlinks
+- Custom Extraction:Extractor 51 Inlinks
+- Custom Extraction:Extractor 52 Inlinks
+- Custom Extraction:Extractor 53 Inlinks
+- Custom Extraction:Extractor 54 Inlinks
+- Custom Extraction:Extractor 55 Inlinks
+- Custom Extraction:Extractor 56 Inlinks
+- Custom Extraction:Extractor 57 Inlinks
+- Custom Extraction:Extractor 58 Inlinks
+- Custom Extraction:Extractor 59 Inlinks
+- Custom Extraction:Extractor 60 Inlinks
+- Custom Extraction:Extractor 61 Inlinks
+- Custom Extraction:Extractor 62 Inlinks
+- Custom Extraction:Extractor 63 Inlinks
+- Custom Extraction:Extractor 64 Inlinks
+- Custom Extraction:Extractor 65 Inlinks
+- Custom Extraction:Extractor 66 Inlinks
+- Custom Extraction:Extractor 67 Inlinks
+- Custom Extraction:Extractor 68 Inlinks
+- Custom Extraction:Extractor 69 Inlinks
+- Custom Extraction:Extractor 70 Inlinks
+- Custom Extraction:Extractor 71 Inlinks
+- Custom Extraction:Extractor 72 Inlinks
+- Custom Extraction:Extractor 73 Inlinks
+- Custom Extraction:Extractor 74 Inlinks
+- Custom Extraction:Extractor 75 Inlinks
+- Custom Extraction:Extractor 76 Inlinks
+- Custom Extraction:Extractor 77 Inlinks
+- Custom Extraction:Extractor 78 Inlinks
+- Custom Extraction:Extractor 79 Inlinks
+- Custom Extraction:Extractor 80 Inlinks
+- Custom Extraction:Extractor 81 Inlinks
+- Custom Extraction:Extractor 82 Inlinks
+- Custom Extraction:Extractor 83 Inlinks
+- Custom Extraction:Extractor 84 Inlinks
+- Custom Extraction:Extractor 85 Inlinks
+- Custom Extraction:Extractor 86 Inlinks
+- Custom Extraction:Extractor 87 Inlinks
+- Custom Extraction:Extractor 88 Inlinks
+- Custom Extraction:Extractor 89 Inlinks
+- Custom Extraction:Extractor 90 Inlinks
+- Custom Extraction:Extractor 91 Inlinks
+- Custom Extraction:Extractor 92 Inlinks
+- Custom Extraction:Extractor 93 Inlinks
+- Custom Extraction:Extractor 94 Inlinks
+- Custom Extraction:Extractor 95 Inlinks
+- Custom Extraction:Extractor 96 Inlinks
+- Custom Extraction:Extractor 97 Inlinks
+- Custom Extraction:Extractor 98 Inlinks
+- Custom Extraction:Extractor 99 Inlinks
+- Custom Extraction:Extractor 100 Inlinks
+- URL Inspection:Rich Results
+- URL Inspection:Referring Pages
+- URL Inspection:Sitemaps
+- Accessibility:All Violations
+- Accessibility:All Incomplete
+- Accessibility:Best Practice:All Violations
+- Accessibility:Best Practice:All Incomplete
+- Accessibility:WCAG 2.0 A:All Violations
+- Accessibility:WCAG 2.0 A:All Incomplete
+- Accessibility:WCAG 2.0 AA:All Violations
+- Accessibility:WCAG 2.0 AA:All Incomplete
+- Accessibility:WCAG 2.0 AAA:All Violations
+- Accessibility:WCAG 2.0 AAA:All Incomplete
+- Accessibility:WCAG 2.1 AA:All Violations
+- Accessibility:WCAG 2.1 AA:All Incomplete
+- Accessibility:WCAG 2.2 AA:All Violations
+- Accessibility:WCAG 2.2 AA:All Incomplete
+- Issues:All
+- Issues:Issue
+- Issues:Warning
+- Issues:Opportunity
+- AI:Images
+- AI:Text to Speech Audio
 
 ## --save-report (Report)
-Save summary reports. Comma-separated.
+Save summary reports. Comma-separated, with submenu prefixes where shown.
 
 - Crawl Overview
-- Redirect Chains
-- Redirect & Canonical Chains
+- Issues Overview
+- Segments Overview
+- Redirects:All Redirects
+- Redirects:Redirect Chains
+- Redirects:Redirect & Canonical Chains
+- Redirects:Redirects to Error
+- Canonicals:Canonical Chains
+- Canonicals:Non-Indexable Canonicals
+- Pagination:Non-200 Pagination URLs
+- Pagination:Unlinked Pagination URLs
+- Hreflang:All hreflang URLs
+- Hreflang:Non-200 hreflang URLs
+- Hreflang:Unlinked hreflang URLs
+- Hreflang:Missing Return Links
+- Hreflang:Inconsistent Language & Region Return Links
+- Hreflang:Non Canonical Return Links
+- Hreflang:Noindex Return Links
 - Insecure Content
 - SERP Summary
-- PageSpeed Summary
+- Orphan Pages
+- Structured Data:Validation Errors & Warnings Summary
+- Structured Data:Validation Errors & Warnings
+- Structured Data:Parse Errors
+- Structured Data:Google Rich Results Features Summary
+- Structured Data:Google Rich Results Features
+- Javascript:Javascript Console Log Summary
+- PageSpeed:PageSpeed Opportunities Summary
+- PageSpeed:CSS Coverage Summary
+- PageSpeed:JavaScript Coverage Summary
+- PageSpeed:Minify CSS
+- PageSpeed:Minify JavaScript
+- PageSpeed:Reduce Unused CSS
+- PageSpeed:Reduce Unused JavaScript
+- PageSpeed:Reduce JavaScript Execution Time
+- PageSpeed:Minimize Main-Thread Work
+- PageSpeed:Avoid Enormous Network Payloads
+- PageSpeed:User Timing Marks and Measures
+- PageSpeed:Layout Shift Culprits
+- PageSpeed:Optimize DOM Size
+- PageSpeed:Font Display
+- PageSpeed:Improve Image Delivery
+- PageSpeed:Legacy JavaScript
+- PageSpeed:Render Blocking Requests
+- PageSpeed:Use Efficient Cache Lifetimes
+- PageSpeed:LCP Request Discovery
+- PageSpeed:LCP Breakdown
+- PageSpeed:Forced Reflow
+- PageSpeed:3rd Parties
+- PageSpeed:Duplicated JavaScript
+- PageSpeed:Network Dependency Tree:Preconnect Candidates
+- PageSpeed:Network Dependency Tree:Critical Path Latency
+- PageSpeed:Document Request Latency:Number of Redirects
+- PageSpeed:Document Request Latency:Server Responds Quickly
+- PageSpeed:Document Request Latency:Applies Text Compression
+- Mobile:Viewport Not Set
+- Mobile:Target Size
+- Mobile:Content Not Sized Correctly
+- Mobile:Illegible Font Size
+- Accessibility:Accessibility Violations Summary
+- HTTP Headers:HTTP Header Summary
+- Cookies:Cookie Summary
 """
 
 
