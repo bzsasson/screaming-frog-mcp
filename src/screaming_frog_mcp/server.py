@@ -42,6 +42,10 @@ SF_CLI_PATH = os.getenv(
 
 SF_DATA_DIR = Path.home() / ".ScreamingFrogSEOSpider" / "ProjectInstanceData"
 TEMP_EXPORT_BASE = Path.home() / ".cache" / "sf-mcp" / "exports"
+# Per-crawl output folders. Deliberately NOT under TEMP_EXPORT_BASE: the
+# export TTL sweep must never delete a crawl file SF wrote here when it
+# runs in memory storage mode (see issue #12).
+CRAWL_OUTPUT_BASE = Path.home() / ".cache" / "sf-mcp" / "crawl-output"
 EXPORT_TTL_SECONDS = int(os.getenv("SF_EXPORT_TTL_SECONDS", "3600"))  # default 1 hour
 MAX_CONCURRENT_CRAWLS = 2
 MAX_ACTIVE_EXPORTS = 10
@@ -216,6 +220,76 @@ def _cleanup_old_exports():
                     shutil.rmtree(d, ignore_errors=True)
 
 
+def _build_crawl_cmd(url: str, output_dir: Path, config_path: Optional[Path] = None) -> list:
+    """Build the SF CLI command for a crawl.
+
+    Every crawl gets its own --output-folder. Without one, SF in memory
+    storage mode writes a fixed-name crawl.seospider into the process
+    working directory and refuses to start while it exists (issue #12).
+    In database storage mode the folder simply stays empty.
+    """
+    cmd = [
+        SF_CLI_PATH,
+        "--headless",
+        "--crawl", url,
+        "--save-crawl",
+        "--output-folder", str(output_dir),
+    ]
+    if config_path:
+        cmd.extend(["--config", str(config_path)])
+    return cmd
+
+
+def _find_memory_mode_save(output_dir: Optional[Path]) -> Optional[Path]:
+    """Return the .seospider file SF wrote into a crawl's output folder, if any.
+
+    A file here means SF runs in memory storage mode: --save-crawl produced
+    a crawl file instead of a database entry. In database mode (what the
+    rest of this server's tools require) the folder stays empty.
+    """
+    if not output_dir or not output_dir.exists():
+        return None
+    for f in sorted(output_dir.rglob("*.seospider")):
+        if not f.is_symlink():
+            return f
+    return None
+
+
+def _crawl_completion_guidance(
+    save_failed: bool,
+    fatal_error: Optional[str],
+    memory_save: Optional[Path],
+) -> str:
+    """The closing paragraph of a completed crawl_status report."""
+    if save_failed:
+        return (
+            "\n\nWARNING: Crawl save failed. The crawl data may not be "
+            "in SF's internal database. Check if the SF GUI has the "
+            "database locked, or try again."
+        )
+    if fatal_error:
+        return (
+            "\n\nThe crawl did not complete successfully. "
+            "Check the error above and try again."
+        )
+    if memory_save:
+        return (
+            f"\n\nScreaming Frog is in memory storage mode, so this crawl was "
+            f"written to a file instead of the internal database:\n"
+            f"  {memory_save}\n"
+            f"list_crawls and export_crawl read the internal database and will "
+            f"not see it. For the full workflow, switch SF to database storage "
+            f"mode ('File > Settings > Storage Mode' in the GUI; the default "
+            f"on current installs). The file stays on disk until you delete "
+            f"it and can be opened in the SF GUI."
+        )
+    return (
+        "\n\nThe crawl is saved in SF's internal database.\n"
+        "Use list_crawls() to see all saved crawls and get the DB ID.\n"
+        "Then use export_crawl(db_id='...') to export data as CSV."
+    )
+
+
 def _cleanup_completed_crawls():
     """Remove completed crawl entries from memory and clean up log files."""
     completed = [
@@ -228,6 +302,17 @@ def _cleanup_completed_crawls():
         log_dir = info.get("log_dir")
         if log_dir and log_dir.exists() and not log_dir.is_symlink():
             shutil.rmtree(log_dir, ignore_errors=True)
+        # Remove the crawl's output folder only when SF left it empty
+        # (database mode). A .seospider file in it is the user's crawl
+        # data (memory mode) and is never auto-deleted.
+        output_dir = info.get("output_dir")
+        if (
+            output_dir
+            and output_dir.exists()
+            and not output_dir.is_symlink()
+            and _find_memory_mode_save(output_dir) is None
+        ):
+            shutil.rmtree(output_dir, ignore_errors=True)
         del _running_crawls[cid]
 
 
@@ -368,13 +453,7 @@ async def crawl_site(
 
     crawl_id = f"crawl-{uuid.uuid4().hex[:8]}"
 
-    cmd = [
-        SF_CLI_PATH,
-        "--headless",
-        "--crawl", url,
-        "--save-crawl",
-    ]
-
+    config_path = None
     if config_file:
         config_path = Path(config_file).resolve()
         if config_path.suffix != ".seospiderconfig":
@@ -388,9 +467,12 @@ async def crawl_site(
             )
         if not config_path.exists():
             return "ERROR: Config file not found."
-        cmd.extend(["--config", str(config_path)])
+
+    output_dir = CRAWL_OUTPUT_BASE / crawl_id
+    cmd = _build_crawl_cmd(url, output_dir, config_path)
 
     try:
+        output_dir.mkdir(parents=True, exist_ok=True)
         # Write crawl output to temp log files instead of PIPE to avoid
         # pipe buffer deadlock on long-running crawls (macOS pipe buffer ~64KB).
         log_dir = TEMP_EXPORT_BASE / f"{crawl_id}-logs"
@@ -430,6 +512,9 @@ async def crawl_site(
                 if "FATAL" in line:
                     fatal_line = line.strip()
                     break
+            # Nothing useful was written on an immediate failure
+            if _find_memory_mode_save(output_dir) is None:
+                shutil.rmtree(output_dir, ignore_errors=True)
             if fatal_line:
                 return f"ERROR: Crawl failed to start.\n{fatal_line}"
             return (
@@ -443,6 +528,7 @@ async def crawl_site(
             "label": crawl_label,
             "started": time.time(),
             "log_dir": log_dir,
+            "output_dir": output_dir,
             "stdout_log": stdout_log,
             "stderr_log": stderr_log,
         }
@@ -559,23 +645,8 @@ async def crawl_status(crawl_id: str) -> str:
         tail = "\n".join(filtered.strip().splitlines()[-20:])
         result += f"\nLast output:\n{tail}"
 
-    if save_failed:
-        result += (
-            f"\n\nWARNING: Crawl save failed. The crawl data may not be "
-            f"in SF's internal database. Check if the SF GUI has the "
-            f"database locked, or try again."
-        )
-    elif fatal_error:
-        result += (
-            f"\n\nThe crawl did not complete successfully. "
-            f"Check the error above and try again."
-        )
-    else:
-        result += (
-            f"\n\nThe crawl is saved in SF's internal database.\n"
-            f"Use list_crawls() to see all saved crawls and get the DB ID.\n"
-            f"Then use export_crawl(db_id='...') to export data as CSV."
-        )
+    memory_save = _find_memory_mode_save(info.get("output_dir"))
+    result += _crawl_completion_guidance(save_failed, fatal_error, memory_save)
 
     return result
 

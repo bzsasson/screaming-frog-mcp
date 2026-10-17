@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 (2026-10-17)
+
+### Bug fixes
+
+- **Fixed consecutive crawls failing in memory storage mode (#12).** In memory storage mode, SF's `--save-crawl` writes a fixed-name `crawl.seospider` into the process working directory and refuses to start while it exists, so every crawl after the first failed with "crawl.seospider exists in output directory". Each crawl now gets its own `--output-folder`. In database storage mode nothing changes (the folder stays empty and is cleaned up).
+- **`crawl_status` no longer claims a memory-mode crawl is "saved in SF's internal database".** When SF wrote a `.seospider` file, the status now reports the file's path, explains that `list_crawls`/`export_crawl` cannot see it, and points to the database storage mode setting. The file is never auto-deleted.
+
+### Documentation
+
+- README now states the database storage mode requirement in Prerequisites and adds a troubleshooting row for the "crawl.seospider exists" error.
+
 ## 0.4.1 (2026-08-31)
 
 ### Fixed
