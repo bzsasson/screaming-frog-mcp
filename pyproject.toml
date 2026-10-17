@@ -42,3 +42,9 @@ packages = ["src/screaming_frog_mcp"]
 dev = [
     "pytest>=9.0.3",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "network: needs live DNS; excluded by default, run with -m network",
+]
+addopts = "-m 'not network'"

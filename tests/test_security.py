@@ -5,6 +5,7 @@ Security tests for screaming-frog-mcp validators.
 Run with: uv run python -m pytest tests/test_security.py -v
 """
 
+import socket
 import sys
 from pathlib import Path
 
@@ -26,8 +27,35 @@ from sf_mcp import (
 # _validate_url
 # ---------------------------------------------------------------------------
 
+def _fake_getaddrinfo(*ips):
+    """Build a socket.getaddrinfo replacement that resolves every hostname
+    to the given IP address(es)."""
+    def fake(host, port, family=0, type=0, proto=0, flags=0):
+        results = []
+        for ip in ips:
+            if ":" in ip:
+                results.append((socket.AF_INET6, socket.SOCK_STREAM, 6, "", (ip, 0, 0, 0)))
+            else:
+                results.append((socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0)))
+        return results
+    return fake
+
+
 class TestValidateUrl:
-    """Tests for SSRF protection in _validate_url."""
+    """Tests for SSRF protection in _validate_url.
+
+    _validate_url resolves hostnames live as a DNS-rebinding check. These
+    tests pin socket.getaddrinfo so results don't depend on the network the
+    suite runs on: some networks resolve real domains (e.g. www.google.com)
+    to 192.0.0.88, which Python's ipaddress module classifies as private,
+    making the validator reject a legitimate URL. Live resolution is covered
+    separately in TestValidateUrlLiveDns.
+    """
+
+    @pytest.fixture(autouse=True)
+    def public_dns(self, monkeypatch):
+        """Resolve every hostname to a public address by default."""
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
 
     # --- Should PASS (return None) ---
 
@@ -72,9 +100,56 @@ class TestValidateUrl:
         assert result is not None, f"Should block SSRF via {reason}: {url}"
 
     def test_dns_resolution_blocks_localhost(self):
-        """DNS resolution catches localhost even as a domain name."""
+        """localhost is rejected by the hostname blocklist, before DNS."""
         result = _validate_url("http://localhost/")
         assert result is not None
+
+    # --- DNS rebinding: public-looking domain resolving to internal IPs ---
+
+    @pytest.mark.parametrize("ip,reason", [
+        ("127.0.0.1", "loopback IPv4"),
+        ("10.0.0.1", "private IPv4 class A"),
+        ("192.168.1.1", "private IPv4 class C"),
+        ("169.254.169.254", "link-local / cloud metadata"),
+        ("192.0.0.88", "IETF protocol assignments block (seen in the wild)"),
+        ("::1", "IPv6 loopback"),
+        ("fe80::1", "IPv6 link-local"),
+    ])
+    def test_dns_rebinding_blocked(self, monkeypatch, ip, reason):
+        monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo(ip))
+        result = _validate_url("https://innocent-looking.example/")
+        assert result is not None, f"Should block rebinding to {reason}: {ip}"
+        assert "resolves to internal address" in result
+
+    def test_dns_rebinding_mixed_public_private_blocked(self, monkeypatch):
+        """One private address among public ones is enough to reject."""
+        monkeypatch.setattr(
+            socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34", "10.0.0.1")
+        )
+        result = _validate_url("https://innocent-looking.example/")
+        assert result is not None
+        assert "resolves to internal address" in result
+
+    def test_unresolvable_hostname_rejected(self, monkeypatch):
+        def raise_gaierror(*args, **kwargs):
+            raise socket.gaierror(8, "nodename nor servname provided")
+        monkeypatch.setattr(socket, "getaddrinfo", raise_gaierror)
+        result = _validate_url("https://doesnotexist.example/")
+        assert result is not None
+        assert "Cannot resolve" in result
+
+
+@pytest.mark.network
+class TestValidateUrlLiveDns:
+    """Live-DNS integration check. Excluded by default (see addopts in
+    pyproject.toml); run with: uv run python -m pytest -m network tests/
+
+    May fail on networks whose resolver returns special-purpose addresses
+    for public domains (e.g. 192.0.0.88).
+    """
+
+    def test_example_com_passes_with_real_resolution(self):
+        assert _validate_url("https://example.com/") is None
 
 
 # ---------------------------------------------------------------------------
