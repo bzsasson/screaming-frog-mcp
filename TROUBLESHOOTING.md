@@ -83,6 +83,22 @@ pip show screaming-frog-mcp   # if installed with pip
 
 Compare against the [latest release on PyPI](https://pypi.org/project/screaming-frog-mcp/), and update with `uv tool upgrade screaming-frog-mcp` or `pip install -U screaming-frog-mcp`. Restart your MCP client afterwards.
 
+### Update installs an old version
+
+PyPI's content delivery network sometimes serves a stale package index for a while after a release, so an update can quietly resolve the previous version even with a forced refresh. Check what you actually got with `screaming-frog-mcp --version`. If it is not the latest release, install the new version's wheel by its direct file URL, which bypasses index resolution. Get the URL (replace `<version>`):
+
+```bash
+curl -s https://pypi.org/pypi/screaming-frog-mcp/<version>/json | python3 -c "import json,sys; print([u['url'] for u in json.load(sys.stdin)['urls'] if u['filename'].endswith('.whl')][0])"
+```
+
+Then install it:
+
+```bash
+uv tool install --reinstall "screaming-frog-mcp @ <wheel-url>"
+```
+
+The index catches up on its own; later updates by name work normally.
+
 ## Still stuck?
 
 [Open an issue](https://github.com/bzsasson/screaming-frog-mcp/issues) and include:
