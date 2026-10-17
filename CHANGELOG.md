@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.3 (2026-10-17)
+
+### Bug fixes
+
+- **Fixed broken fresh installs: pinned `mcp>=1.30.0,<2`.** The mcp Python SDK 2.x renamed the FastMCP API this server imports, and the old unbounded `mcp>=1.26.0` constraint let new installs resolve mcp 2.x, crashing the server at startup (ModuleNotFoundError on `mcp.server.fastmcp`). Installs made while mcp 2.x was the default resolution were dead on arrival; reinstalling 0.4.3 fixes them.
+
+### Security
+
+- Refreshed the dependency lockfile. The previous lock carried 55 known advisories across 8 transitive packages (mcp, starlette, pyjwt, cryptography, anyio, idna, python-multipart, pydantic-settings); pip-audit now reports none.
+- SECURITY.md documents the limits of the SSRF protection: the seed URL check is a guardrail against prompt-injected crawl targets, not a sandbox around Screaming Frog, which follows redirects and checks discovered links itself.
+
+### Internal
+
+- New CI job installs the built wheel in a fresh environment with no lockfile and fails unless the server completes an MCP handshake. This is the guard that would have caught the mcp 2.x breakage, which the lockfile-pinned test matrix could not see.
+
 ## 0.4.2 (2026-10-17)
 
 ### Bug fixes

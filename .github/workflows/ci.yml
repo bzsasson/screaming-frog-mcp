@@ -21,3 +21,27 @@ jobs:
         run: uv sync --dev
       - name: Run tests
         run: uv run python -m pytest tests/ -v
+
+  # The lockfile pins CI's dependencies, but end users resolve fresh at
+  # install time, so the lock can be green while real installs are broken
+  # (this happened when mcp 2.x shipped and removed the FastMCP import
+  # that mcp>=1.26.0 allowed). This job installs the built wheel the way
+  # a user would, with no lockfile, and fails if the server cannot
+  # complete an MCP handshake.
+  fresh-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - name: Build wheel
+        run: uv build
+      - name: Install wheel in a fresh environment (no lockfile)
+        run: |
+          uv venv /tmp/fresh
+          uv pip install --python /tmp/fresh/bin/python dist/*.whl
+      - name: Verify --version answers
+        run: /tmp/fresh/bin/screaming-frog-mcp --version
+      - name: Verify MCP handshake
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            | timeout 60 /tmp/fresh/bin/screaming-frog-mcp | grep -q '"serverInfo"'

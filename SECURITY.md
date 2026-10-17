@@ -29,6 +29,21 @@ Security-relevant areas:
 - Path traversal protection for file operations
 - CLI argument injection prevention
 
+### Limits of the SSRF protection
+
+The server validates the crawl seed URL before starting: scheme allowlist,
+private and link-local IP blocking, DNS resolution checks, and the optional
+`SF_ALLOWED_DOMAINS` allowlist. It does not and cannot control what
+Screaming Frog itself fetches after the crawl starts. SF follows redirects
+and status-checks the links it discovers, so crawling a hostile site can
+cause SF to send requests to addresses the seed check would have rejected,
+including internal ones. This is inherent to running any crawler against
+untrusted content, not specific to this wrapper. When crawling sites you do
+not control, run the crawl from a network position where internal requests
+are harmless, and use a `.seospiderconfig` that disables external link
+checking. The seed validation is a guardrail against a prompt-injected
+crawl target, not a sandbox around the crawler.
+
 ## Supported Versions
 
 Only the latest release on PyPI receives security updates.
