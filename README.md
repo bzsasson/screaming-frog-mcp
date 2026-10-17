@@ -35,7 +35,9 @@ The [Pre-Launch Website Audit](https://github.com/bzsasson/pre-launch-audit-skil
 
 2. **A valid Screaming Frog license.** The free version has a 500-URL crawl limit. Most MCP features (headless CLI, saving/loading crawls, exports) require a paid license.
 
-3. **Python 3.10+**
+3. **Database storage mode** in Screaming Frog ('File > Settings > Storage Mode'; the default on current installs). `list_crawls`, `export_crawl`, and the other data tools read SF's internal crawl database. In memory storage mode, `crawl_site` still works but saves each crawl as a `.seospider` file (the status output tells you where), and the data tools cannot see it.
+
+4. **Python 3.10+**
 
 ## Important: How the Workflow Works
 
@@ -233,7 +235,8 @@ Exported CSVs are stored in `~/.cache/sf-mcp/exports/` and are automatically cle
 | "GUI is already running" error | Quit the Screaming Frog application, then retry |
 | Empty CSV exports (headers only, 0 data rows) | The GUI likely has the database locked — close it and re-export |
 | CLI not found | Check that `SF_CLI_PATH` in `.env` points to the correct executable |
-| Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing |
+| Crawl not appearing in `list_crawls` | Make sure you saved the crawl in the GUI (File > Save) before closing. If you crawled via `crawl_site`, check SF is in database storage mode: in memory mode the crawl is saved as a file, and `crawl_status` reports its path |
+| "crawl.seospider exists in output directory" FATAL | Fixed in v0.4.2: each crawl now gets its own output folder. Update with `uv tool upgrade screaming-frog-mcp` or `pip install -U screaming-frog-mcp`. The error itself means SF is in memory storage mode; switch to database storage mode ('File > Settings > Storage Mode') for the full workflow |
 | Export times out | Large crawls may need more time — set `SF_EXPORT_TIMEOUT_SECONDS` to a higher value (e.g. `600`), or export fewer tabs |
 | `list_crawls` fails on Windows | Fixed in v0.2.2 — update with `uv tool upgrade screaming-frog-mcp` or `pip install -U screaming-frog-mcp` |
 | "Could not attach to MCP server" / initialize timeout | Your config launches the server via `uvx`, which downloads dependencies at startup and can exceed the 60s handshake timeout on a cold cache. Switch to a persistent install (`uv tool install screaming-frog-mcp`) and point `command` at the installed executable, per [Setup](#setup) |
