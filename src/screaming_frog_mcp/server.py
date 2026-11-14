@@ -20,6 +20,8 @@ import socket
 import subprocess
 import sys
 import time
+
+import regex
 import uuid
 from pathlib import Path
 from typing import Optional, Union
@@ -51,6 +53,13 @@ MAX_CONCURRENT_CRAWLS = 2
 MAX_ACTIVE_EXPORTS = 10
 MAX_READ_LIMIT = 1000
 MAX_INPUT_LENGTH = 2000
+# Guards against regular expression denial of service in user-supplied
+# row filters (issue #16): pattern length cap, per-cell match timeout,
+# and a wall-clock budget for a whole filtering loop.
+MAX_FILTER_VALUE_LENGTH = 512
+REGEX_MATCH_TIMEOUT_SECONDS = 1.0
+FILTER_TIME_BUDGET_SECONDS = 20.0
+FILTER_BUDGET_CHECK_EVERY = 256  # rows between budget checks
 MAX_CRAWL_DURATION = 7200  # 2 hours
 EXPORT_TIMEOUT_SECONDS = int(os.getenv("SF_EXPORT_TIMEOUT_SECONDS", "300"))  # default 5 min
 
@@ -873,6 +882,11 @@ def _compile_row_filter(filter_value, filter_mode):
     """Validate filter args shared by read_crawl_data and aggregate_crawl_data.
 
     Returns (mode, filter_value_as_str, compiled_regex_or_None, error_or_None).
+
+    User-supplied patterns are compiled with the `regex` package rather than
+    stdlib `re`: its engine survives classic catastrophic-backtracking
+    patterns, and its match calls accept a hard timeout, which stdlib `re`
+    has no way to enforce (issue #16, CWE-1333).
     """
     mode = (filter_mode or "contains").lower()
     if mode not in ("contains", "exact", "regex"):
@@ -880,27 +894,53 @@ def _compile_row_filter(filter_value, filter_mode):
 
     if filter_value is not None:
         filter_value = str(filter_value)
+        if len(filter_value) > MAX_FILTER_VALUE_LENGTH:
+            return None, None, None, (
+                f"ERROR: filter_value exceeds {MAX_FILTER_VALUE_LENGTH} "
+                f"characters. Use a shorter filter."
+            )
 
     filter_regex = None
     if mode == "regex" and filter_value:
         try:
-            filter_regex = re.compile(filter_value, re.IGNORECASE)
-        except re.error as e:
+            filter_regex = regex.compile(filter_value, regex.IGNORECASE)
+        except regex.error as e:
             return None, None, None, f"ERROR: Invalid regex pattern: {e}"
 
     return mode, filter_value, filter_regex, None
 
 
 def _row_matches(row, filter_column, filter_value, mode, filter_regex) -> bool:
-    """Apply the shared row filter. Callers skip rows where this returns False."""
+    """Apply the shared row filter. Callers skip rows where this returns False.
+
+    Regex matching carries a per-cell timeout; a pattern that backtracks
+    past it raises TimeoutError, which the tool loops turn into an error
+    message instead of a hung call.
+    """
     if not (filter_column and filter_value):
         return True
     cell = row.get(filter_column) or ""
     if mode == "exact":
         return cell.lower() == filter_value.lower()
     if mode == "regex":
-        return bool(filter_regex.search(cell))
+        return bool(filter_regex.search(cell, timeout=REGEX_MATCH_TIMEOUT_SECONDS))
     return filter_value.lower() in cell.lower()  # contains
+
+
+_REGEX_TIMEOUT_ERROR = (
+    "ERROR: The regex filter timed out while matching a row (catastrophic "
+    "backtracking). Simplify the pattern: avoid nested or ambiguous "
+    "quantifiers like (a+)+ or (a|aa)+ and prefer anchored, specific "
+    "expressions."
+)
+
+
+def _budget_error() -> str:
+    return (
+        f"ERROR: Filtering exceeded the {FILTER_TIME_BUDGET_SECONDS:.0f}s "
+        f"time budget. Narrow the filter, request fewer columns, or "
+        f"paginate with offset and limit."
+    )
 
 
 def _resolve_export_file(export_id: str, file: str):
@@ -1100,9 +1140,18 @@ def read_crawl_data(
 
             rows = []
             skipped = 0
+            scanned = 0
+            loop_start = time.time()
             for row in reader:
-                if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
-                    continue
+                scanned += 1
+                if scanned % FILTER_BUDGET_CHECK_EVERY == 0:
+                    if time.time() - loop_start > FILTER_TIME_BUDGET_SECONDS:
+                        return _budget_error()
+                try:
+                    if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
+                        continue
+                except TimeoutError:
+                    return _REGEX_TIMEOUT_ERROR
 
                 if skipped < offset:
                     skipped += 1
@@ -1214,9 +1263,18 @@ def aggregate_crawl_data(
 
             counts: dict = {}
             total = 0
+            scanned = 0
+            loop_start = time.time()
             for row in reader:
-                if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
-                    continue
+                scanned += 1
+                if scanned % FILTER_BUDGET_CHECK_EVERY == 0:
+                    if time.time() - loop_start > FILTER_TIME_BUDGET_SECONDS:
+                        return _budget_error()
+                try:
+                    if not _row_matches(row, filter_column, filter_value, mode, filter_regex):
+                        continue
+                except TimeoutError:
+                    return _REGEX_TIMEOUT_ERROR
                 total += 1
                 if group_by:
                     val = (row.get(group_by) or "").strip() or "(empty)"

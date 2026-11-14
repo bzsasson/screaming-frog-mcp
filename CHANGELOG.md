@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4 (2026-11-14)
+
+### Security
+
+- **Hardened the regex row filter against regular expression denial of service (#16, CWE-1333).** A pathological `filter_value` pattern in `read_crawl_data` or `aggregate_crawl_data` could hang the tool call indefinitely through catastrophic backtracking (reproduced: a 7-character pattern against a 39-character cell ran for minutes). Three guards now apply: `filter_value` is capped at 512 characters, every per-cell match carries a 1-second timeout, and each filtering loop has a 20-second wall-clock budget. Exceeding any of them returns a clear error telling the agent how to adjust. Regex filtering semantics are unchanged.
+- User-supplied patterns now compile with the `regex` package instead of stdlib `re`. Its engine survives classic backtracking bombs outright and enforces match timeouts, which stdlib `re` cannot. This is the project's first new runtime dependency since 0.1.0; it is pure filtering infrastructure and adds no tool surface.
+
 ## 0.4.3 (2026-10-17)
 
 ### Bug fixes
